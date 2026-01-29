@@ -3,71 +3,112 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Sleep Tracker: Night 2+</title>
+    <title>Bedtime Fading: Evolution Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f1f5f9;
+        }
+    </style>
 </head>
 
-<body class="bg-slate-50 p-6">
-    <div class="max-w-md mx-auto bg-white rounded-3xl shadow-xl p-8 border border-indigo-50">
-        <div id="status-badge"
-            class="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4"></div>
+<body class="p-4 md:p-10">
+    <div class="max-w-2xl mx-auto space-y-6">
+        <div class="bg-white rounded-[2rem] p-8 shadow-xl border border-slate-200">
+            <div class="text-center">
+                <div id="mode-badge"
+                    class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 tracking-widest">
+                </div>
 
-        <div class="border-2 border-dashed border-indigo-100 rounded-2xl p-6 text-center">
-            <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Prescribed Bedtime</p>
-            <div id="res-bed" class="text-6xl font-extrabold text-slate-800">--:--</div>
-            <p class="text-[10px] font-bold text-slate-400 uppercase mt-4">Wake Up: <span id="res-wake">--:--</span></p>
-        </div>
+                <div
+                    class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-8 rounded-3xl border-2 border-dashed border-indigo-200">
+                    <div>
+                        <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Prescribed
+                            Bedtime</p>
+                        <span id="res-bed" class="text-6xl font-extrabold text-slate-800">--:--</span>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Prescribed Wake
+                            Up</p>
+                        <span id="res-wake" class="text-6xl font-extrabold text-slate-800">--:--</span>
+                    </div>
+                </div>
 
-        <div class="mt-6 p-4 bg-slate-50 rounded-xl">
-            <p id="logic-text" class="text-xs text-slate-600 italic leading-relaxed text-center"></p>
+                <div class="mt-8 p-5 bg-indigo-50/50 rounded-2xl">
+                    <p id="logic-info" class="text-xs text-indigo-900 font-medium italic leading-relaxed"></p>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         const p = new URLSearchParams(window.location.search);
         const tToM = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return (h * 60) + m; };
-        const mToT = (m) => { let tm = Math.round(m); while (tm < 0) tm += 1440; return String(Math.floor(tm / 60) % 24).padStart(2, '0') + ":" + String(tm % 60).padStart(2, '0'); };
+        const mToT = (m) => {
+            let tm = Math.round(m); while (tm < 0) tm += 1440;
+            return String(Math.floor(tm / 60) % 24).padStart(2, '0') + ":" + String(tm % 60).padStart(2, '0');
+        };
 
-        function update() {
-            const prevBed = p.get('prev_bed');
-            const sol2 = parseInt(p.get('sol_val') || 0);
-            const waso2 = parseInt(p.get('waso_val') || 0);
+        function run() {
+            const badge = document.getElementById('mode-badge');
+            const logic = document.getElementById('logic-info');
+            let targetBedMins, targetWakeMins;
 
-            // Check if "First Night" data exists in URL
-            const hasFirstNight = p.has('first_sol');
-            const badge = document.getElementById('status-badge');
-            const logic = document.getElementById('logic-text');
+            // Check if we are in "Mode 2" (Specific Night Logs)
+            if (p.has('first_sol')) {
+                // MODE 2: SPECIFIC LOGS (NIGHT 3 CALCULATION)
+                badge.innerText = "Mode: Night 3 (Averaging Logs)";
+                badge.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-emerald-600 text-white tracking-widest";
 
-            let finalBedMins = tToM(prevBed);
-
-            if (!hasFirstNight) {
-                // NIGHT 2 LOGIC
-                badge.innerText = "Night 2: Static Phase";
-                badge.classList.add('bg-blue-100', 'text-blue-700');
-                logic.innerText = "One night of data collected. Keeping bedtime static for Night 2 to confirm baseline.";
-            } else {
-                // NIGHT 3+ LOGIC
                 const sol1 = parseInt(p.get('first_sol'));
                 const waso1 = parseInt(p.get('first_waso'));
+                const sol2 = parseInt(p.get('sol_val'));
+                const waso2 = parseInt(p.get('waso_val'));
+
+                // Using current night's inputs for the base of the next shift
+                const currentBed = tToM(p.get('bed_val') || p.get('prev_bed'));
+                const currentWake = tToM(p.get('wake_val') || p.get('prev_wake'));
+
                 const avgSol = (sol1 + sol2) / 2;
                 const avgWaso = (waso1 + waso2) / 2;
 
-                badge.innerText = "Night 3+: Adjustment Phase";
-                badge.classList.add('bg-emerald-100', 'text-emerald-700');
-
                 if (avgSol <= 15 && avgWaso <= 15) {
-                    finalBedMins -= 15;
-                    logic.innerHTML = `Success! Avg SOL/WASO is ${avgSol}/${avgWaso}m. <br>Bedtime moved 15m earlier.`;
+                    targetBedMins = currentBed - 15;
+                    logic.innerHTML = `Excellent. Average SOL/WASO (${avgSol}/${avgWaso}m) is low. Bedtime moved 15m earlier from last night's ${p.get('bed_val')}.`;
                 } else {
-                    finalBedMins += 15;
-                    logic.innerHTML = `Avg SOL/WASO is ${avgSol}/${avgWaso}m. <br>Bedtime moved 15m later to increase sleep drive.`;
+                    targetBedMins = currentBed + 15;
+                    logic.innerHTML = `Average SOL/WASO (${avgSol}/${avgWaso}m) is high. Bedtime moved 15m later from last night's ${p.get('bed_val')}.`;
                 }
+                targetWakeMins = currentWake;
+
+            } else {
+                // MODE 1: BASELINE AVERAGES (INITIAL PHASE)
+                badge.innerText = "Mode: Initial Baseline Phase";
+                badge.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-indigo-600 text-white tracking-widest";
+
+                const bWake = tToM(p.get('base_wake'));
+                const bBed = tToM(p.get('base_bed'));
+                const bSol = parseInt(p.get('base_sol'));
+                const bWaso = parseInt(p.get('base_waso'));
+
+                let wakeTotal = bWake; if (wakeTotal <= bBed) wakeTotal += 1440;
+                const actualSleep = (wakeTotal - bBed) - bSol - bWaso;
+
+                // Night 2 Prediction based on Baseline
+                targetBedMins = (bSol > 15 && bWaso <= 15) ? (bBed + bSol) + 30 : wakeTotal - (actualSleep - 30);
+                targetWakeMins = bWake;
+
+                logic.innerHTML = `Calculating your first transition using baseline averages. Bedtime adjusted to optimize sleep drive.`;
             }
 
-            document.getElementById('res-bed').innerText = mToT(finalBedMins);
-            document.getElementById('res-wake').innerText = p.get('prev_wake') || "07:00";
+            document.getElementById('res-bed').innerText = mToT(targetBedMins);
+            document.getElementById('res-wake').innerText = mToT(targetWakeMins);
         }
-        window.onload = update;
+
+        window.onload = run;
     </script>
 </body>
 
