@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Phase 2: Night 2 & 3 Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 p-6">
+    <div class="max-w-xl mx-auto space-y-6">
+        <div class="bg-white rounded-[2.5rem] p-10 shadow-xl border border-indigo-50 text-center">
+            <div id="phase-label" class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-slate-800 text-white tracking-widest">
+                Processing Data...
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 bg-indigo-50/30 p-8 rounded-3xl border-2 border-dashed border-indigo-100">
+                <div>
+                    <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Prescribed Bedtime</p>
+                    <div id="res-bed" class="text-5xl font-extrabold text-slate-800">--:--</div>
+                </div>
+                <div>
+                    <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Wake Up</p>
+                    <div id="res-wake" class="text-5xl font-extrabold text-slate-800">--:--</div>
+                </div>
+            </div>
+
+            <div class="mt-8 p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <p id="logic-text" class="text-xs text-slate-500 font-medium italic"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const p = new URLSearchParams(window.location.search);
+        
+        function tToM(t) { if(!t) return 0; const [h, m] = t.split(':').map(Number); return (h * 60) + m; }
+        function mToT(m) {
+            let tm = Math.round(m); while (tm < 0) tm += 1440;
+            return String(Math.floor(tm / 60) % 24).padStart(2, '0') + ":" + String(tm % 60).padStart(2, '0');
+        }
+
+        function run() {
+            // Get Current Log (Night 2)
+            const sol2 = parseInt(p.get('sol_val') || 0);
+            const waso2 = parseInt(p.get('waso_val') || 0);
+            const prevBed = p.get('prev_bed');
+            const prevWake = p.get('prev_wake');
+
+            // Get First Night Data for averaging
+            const sol1 = parseInt(p.get('first_sol'));
+            const waso1 = parseInt(p.get('first_waso'));
+
+            const phaseLabel = document.getElementById('phase-label');
+            const logicText = document.getElementById('logic-text');
+
+            let targetBedMins;
+
+            // Logic Check: Do we have Night 1 data?
+            if (p.has('first_sol')) {
+                // PHASE: Morning of Night 3 (Averaging Night 1 & 2)
+                phaseLabel.innerText = "Night 3 Prescription (Average)";
+                phaseLabel.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-emerald-600 text-white tracking-widest";
+                
+                const avgSol = (sol1 + sol2) / 2;
+                const avgWaso = (waso1 + waso2) / 2;
+                const lastBedMins = tToM(prevBed);
+
+                if (avgSol <= 15 && avgWaso <= 15) {
+                    targetBedMins = lastBedMins - 15;
+                    logicText.innerHTML = `Success: Avg SOL/WASO is ${avgSol}/${avgWaso}m. Bedtime moved 15m earlier.`;
+                } else {
+                    targetBedMins = lastBedMins + 15;
+                    logicText.innerHTML = `Delay: Avg SOL/WASO is ${avgSol}/${avgWaso}m. Bedtime moved 15m later.`;
+                }
+            } else {
+                // PHASE: Night 2 (Static)
+                phaseLabel.innerText = "Night 2 Prescription (Static)";
+                phaseLabel.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-blue-600 text-white tracking-widest";
+                
+                targetBedMins = tToM(prevBed);
+                logicText.innerHTML = "Night 2 remains static based on the first night's prescription.";
+            }
+
+            document.getElementById('res-bed').innerText = mToT(targetBedMins);
+            document.getElementById('res-wake').innerText = prevWake || "09:27";
+        }
+
+        window.onload = run;
+    </script>
+</body>
+</html>
