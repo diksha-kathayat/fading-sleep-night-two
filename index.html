@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Sleep Evolution: 8hr Minimum</title>
+    <title>Sleep Intervention: Rolling Analysis</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
@@ -12,12 +12,26 @@
             font-family: 'Inter', sans-serif;
             background: #f8fafc;
         }
+
+        .data-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .data-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1e293b;
+        }
     </style>
 </head>
 
 <body class="p-6">
     <div class="max-w-xl mx-auto space-y-6">
-        <div class="bg-white rounded-[2rem] p-8 shadow-xl border border-slate-200 text-center">
+        <div class="bg-white rounded-[2.5rem] p-8 shadow-xl border border-slate-200 text-center">
             <div id="status-tag"
                 class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 tracking-widest"></div>
 
@@ -37,13 +51,36 @@
                 <p id="safety-info" class="text-[10px] text-amber-600 font-bold uppercase tracking-tight"></p>
             </div>
         </div>
+
+        <div id="averaging-card" class="hidden bg-white rounded-3xl p-6 shadow-md border border-slate-100">
+            <h3 class="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> 2-Night Performance Review
+            </h3>
+            <div class="grid grid-cols-3 gap-4 text-center">
+                <div class="space-y-1">
+                    <p class="data-label">Day 8 Log</p>
+                    <p id="d8-vals" class="data-value">-- / --</p>
+                </div>
+                <div class="space-y-1">
+                    <p class="data-label">Day 9 Log</p>
+                    <p id="d9-vals" class="data-value">-- / --</p>
+                </div>
+                <div class="bg-emerald-50 rounded-xl py-2 space-y-1 border border-emerald-100">
+                    <p class="data-label text-emerald-600">Average</p>
+                    <p id="avg-vals" class="data-value text-emerald-700">-- / --</p>
+                </div>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-4 text-center font-medium italic">Format: SOL / WASO (minutes)</p>
+        </div>
     </div>
 
     <script>
         const p = new URLSearchParams(window.location.search);
+
         const tToM = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return (h * 60) + m; };
         const mToT = (m) => {
-            let tm = Math.round(m); while (tm < 0) tm += 1440;
+            let tm = Math.round(m / 5) * 5;
+            while (tm < 0) tm += 1440;
             return String(Math.floor(tm / 60) % 24).padStart(2, '0') + ":" + String(tm % 60).padStart(2, '0');
         };
 
@@ -51,48 +88,64 @@
             const statusTag = document.getElementById('status-tag');
             const logic = document.getElementById('logic-info');
             const safety = document.getElementById('safety-info');
+            const avgCard = document.getElementById('averaging-card');
+
             let targetBed, targetWake;
 
-            // 1. Identify Mode & Calculate Initial Target
-            if (p.has('first_sol') && p.has('sol_val')) {
-                statusTag.innerText = "Mode: Log Averaging (Night 3+)";
-                statusTag.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-emerald-600 text-white tracking-widest";
+            const dateStr = p.get('date_val');
+            let isAdjustmentPhase = false;
+            if (dateStr) {
+                const parts = dateStr.split('/');
+                const logDate = new Date(parts[2], parts[0] - 1, parts[1]);
+                const switchDate = new Date(2026, 0, 30);
+                if (logDate >= switchDate) isAdjustmentPhase = true;
+            }
 
-                const s1 = parseInt(p.get('first_sol')), w1 = parseInt(p.get('first_waso'));
-                const s2 = parseInt(p.get('sol_val')), w2 = parseInt(p.get('waso_val'));
-                const anchorBed = tToM(p.get('prev_bed') || p.get('bed_val'));
-                targetWake = tToM(p.get('prev_wake') || p.get('wake_val'));
+            if (isAdjustmentPhase && p.has('day_8_SOL') && p.has('sleep_intervention_SOL')) {
+                statusTag.innerText = "Phase: Rolling Adjustment";
+                statusTag.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-emerald-600 text-white tracking-widest";
+                avgCard.classList.remove('hidden');
+
+                const s1 = parseInt(p.get('day_8_SOL')), w1 = parseInt(p.get('day_8_WASO'));
+                const s2 = parseInt(p.get('sleep_intervention_SOL')), w2 = parseInt(p.get('sleep_intervention_WASO'));
+                const anchorBed = tToM(p.get('sleep_intervention_bedtime'));
+                targetWake = tToM(p.get('sleep_intervention_wakeup_time'));
 
                 const avgSol = (s1 + s2) / 2;
                 const avgWaso = (w1 + w2) / 2;
 
-                targetBed = (avgSol <= 15 && avgWaso <= 15) ? anchorBed - 15 : anchorBed + 15;
-                logic.innerHTML = `Avg SOL/WASO: ${avgSol}/${avgWaso}m. Calculated shift from previous bedtime.`;
+                // Update Table Display
+                document.getElementById('d8-vals').innerText = `${s1}m / ${w1}m`;
+                document.getElementById('d9-vals').innerText = `${s2}m / ${w2}m`;
+                document.getElementById('avg-vals').innerText = `${avgSol}m / ${avgWaso}m`;
+
+                if (avgSol <= 15 && avgWaso <= 15) {
+                    targetBed = anchorBed - 15;
+                    logic.innerHTML = `Efficiency Goal Met. Bedtime moved 15m earlier.`;
+                } else {
+                    targetBed = anchorBed + 15;
+                    logic.innerHTML = `Efficiency Goal Not Met. Bedtime moved 15m later.`;
+                }
 
             } else {
-                statusTag.innerText = "Mode: Initial Baseline Phase";
+                statusTag.innerText = "Phase: Initial Static";
                 statusTag.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-indigo-600 text-white tracking-widest";
+                avgCard.classList.add('hidden');
 
-                const bBed = tToM(p.get('base_bed')), bWake = tToM(p.get('base_wake'));
-                const bSol = parseInt(p.get('base_sol') || 0), bWaso = parseInt(p.get('base_waso') || 0);
+                const bBed = tToM(p.get('base_bed') || "21:08");
+                const bSol = parseInt(p.get('base_sol') || 16);
+                const bWaso = parseInt(p.get('base_waso') || 21);
+                targetWake = tToM(p.get('base_wake') || "09:27");
 
-                let wakeTotal = bWake; if (wakeTotal <= bBed) wakeTotal += 1440;
-                const actualSleep = (wakeTotal - bBed) - bSol - bWaso;
-
-                targetBed = (bSol > 15 && bWaso <= 15) ? (bBed + bSol) + 30 : wakeTotal - (actualSleep - 30);
-                targetWake = bWake;
-                logic.innerHTML = `Prescription generated from baseline averages.`;
+                targetBed = bBed + bSol + bWaso + 30;
+                logic.innerHTML = `Baseline Phase active. Adjustments begin Jan 30.`;
             }
 
-            // 2. APPLY 8-HOUR MINIMUM SAFEGUARD
-            // Calculate current window (Difference between wake and bed)
             let tempWake = targetWake;
             if (tempWake <= (targetBed % 1440)) tempWake += 1440;
-            let windowSize = tempWake - (targetBed % 1440);
-
-            if (windowSize < 480) { // 480 mins = 8 hours
+            if ((tempWake - (targetBed % 1440)) < 480) {
                 targetBed = targetWake - 480;
-                safety.innerHTML = "⚠️ 8-Hour Minimum Applied: Bedtime moved earlier to protect sleep window.";
+                safety.innerHTML = "⚠️ 8-Hour Minimum Safeguard Applied";
             } else {
                 safety.innerHTML = "";
             }
