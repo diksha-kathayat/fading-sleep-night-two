@@ -39,7 +39,9 @@
     <div class="max-w-xl mx-auto space-y-6">
         <div class="bg-transparent p-4 text-center">
             <div id="status-tag"
-                class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 tracking-widest"></div>
+                class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 tracking-widest bg-emerald-600 text-white">
+                Rolling Adjustment Active
+            </div>
 
             <div class="grid grid-cols-2 gap-2 p-6 rounded-3xl border-2 border-dashed border-indigo-200 bg-transparent">
                 <div>
@@ -62,18 +64,18 @@
             </div>
         </div>
 
-        <div id="averaging-card" class="hidden bg-transparent rounded-3xl p-6 border border-slate-200">
+        <div id="averaging-card" class="bg-transparent rounded-3xl p-6 border border-slate-200">
             <h3 class="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
                 <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> 2-Night Performance Review
             </h3>
             <div class="grid grid-cols-3 gap-4 text-center">
                 <div class="space-y-1">
-                    <p class="data-label">Day 8 Log</p>
-                    <p id="d8-vals" class="data-value">-- / --</p>
+                    <p class="data-label">Night 1</p>
+                    <p id="d1-vals" class="data-value">-- / --</p>
                 </div>
                 <div class="space-y-1">
-                    <p class="data-label">Day 9 Log</p>
-                    <p id="d9-vals" class="data-value">-- / --</p>
+                    <p class="data-label">Night 2</p>
+                    <p id="d2-vals" class="data-value">-- / --</p>
                 </div>
                 <div class="bg-emerald-50/50 rounded-xl py-2 space-y-1 border border-emerald-100">
                     <p class="data-label text-emerald-600">Average</p>
@@ -89,17 +91,13 @@
         const tToM = (t) => {
             if (!t) return 0;
             let str = t.toLowerCase().trim();
-            const isPm = str.includes('pm');
-            const isAm = str.includes('am');
+            const isPm = str.includes('pm'), isAm = str.includes('am');
             const parts = str.replace(/[apm\s]/g, '').split(/[:.\s]/);
-            let h = parseInt(parts[0]) || 0;
-            let m = parseInt(parts[1]) || 0;
-
+            let h = parseInt(parts[0]) || 0, m = parseInt(parts[1]) || 0;
             if (isPm && h < 12) h += 12;
             if (isAm && h === 12) h = 0;
             if (!isAm && !isPm) {
-                if (h >= 1 && h <= 7) { /* assume morning AM */ }
-                else if (h >= 8 && h <= 11) h += 12; // assume night PM
+                if (h >= 8 && h <= 11) h += 12;
             }
             return (h * 60) + m;
         };
@@ -108,73 +106,40 @@
             let tm = Math.round(m / 5) * 5;
             while (tm < 0) tm += 1440;
             tm %= 1440;
-
-            let h = Math.floor(tm / 60);
-            let mins = tm % 60;
-
+            let h = Math.floor(tm / 60), mins = tm % 60;
             const ampm = h >= 12 ? 'PM' : 'AM';
             h = h % 12 || 12;
-
-            // Fix: All AM/PM suffixes now use the same consistent slate-500 color
             return `${h}:${String(mins).padStart(2, '0')}<span class="text-base ml-1 font-bold text-slate-500">${ampm}</span>`;
         };
 
         function calculate() {
-            const statusTag = document.getElementById('status-tag');
-            const logic = document.getElementById('logic-info');
-            const safety = document.getElementById('safety-info');
-            const avgCard = document.getElementById('averaging-card');
-
-            const dateStr = p.get('date_val');
-            let isAdjustmentPhase = false;
-            if (dateStr) {
-                const parts = dateStr.split('/');
-                const logDate = new Date(parts[2], parts[0] - 1, parts[1]);
-                if (logDate >= new Date(2026, 0, 30)) isAdjustmentPhase = true;
-            }
-
-            // Target Wake is strictly anchored to base_wake
+            // Inputs: base_wake, prev_bed, s1, w1, s2, w2
             const targetWake = tToM(p.get('base_wake') || "07:00");
-            let targetBed;
+            const anchorBed = tToM(p.get('prev_bed') || "23:00");
 
-            if (isAdjustmentPhase && p.has('day_8_SOL')) {
-                statusTag.innerText = "Phase: Rolling Adjustment";
-                statusTag.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-emerald-600 text-white tracking-widest";
-                avgCard.classList.remove('hidden');
+            const s1 = parseInt(p.get('s1') || 0), w1 = parseInt(p.get('w1') || 0);
+            const s2 = parseInt(p.get('s2') || 0), w2 = parseInt(p.get('w2') || 0);
 
-                const s1 = parseInt(p.get('day_8_SOL')), w1 = parseInt(p.get('day_8_WASO'));
-                const s2 = parseInt(p.get('sleep_intervention_SOL')), w2 = parseInt(p.get('sleep_intervention_WASO'));
-                const anchorBed = tToM(p.get('sleep_intervention_bedtime'));
+            const avgSol = (s1 + s2) / 2;
+            const avgWaso = (w1 + w2) / 2;
 
-                const avgSol = (s1 + s2) / 2;
-                const avgWaso = (w1 + w2) / 2;
+            // Display Table
+            document.getElementById('d1-vals').innerText = `${s1}m / ${w1}m`;
+            document.getElementById('d2-vals').innerText = `${s2}m / ${w2}m`;
+            document.getElementById('avg-vals').innerText = `${avgSol}m / ${avgWaso}m`;
 
-                document.getElementById('d8-vals').innerText = `${s1}m / ${w1}m`;
-                document.getElementById('d9-vals').innerText = `${s2}m / ${w2}m`;
-                document.getElementById('avg-vals').innerText = `${avgSol}m / ${avgWaso}m`;
+            // Logic: Pure Adjustment
+            let targetBed = (avgSol <= 15 && avgWaso <= 15) ? anchorBed - 15 : anchorBed + 15;
+            document.getElementById('logic-info').innerHTML = `Bedtime adjusted 15m from previous anchor (${mToT(anchorBed)}).`;
 
-                targetBed = (avgSol <= 15 && avgWaso <= 15) ? anchorBed - 15 : anchorBed + 15;
-                logic.innerHTML = `Prescription based on efficiency. Wakeup remains static.`;
-            } else {
-                statusTag.innerText = "Phase: Initial Static";
-                statusTag.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-indigo-600 text-white tracking-widest";
-                avgCard.classList.add('hidden');
-
-                const bBed = tToM(p.get('base_bed') || "21:00");
-                targetBed = bBed + parseInt(p.get('base_sol') || 15) + parseInt(p.get('base_waso') || 15) + 30;
-                logic.innerHTML = `Baseline Phase active. Wakeup anchor set to ${p.get('base_wake') || 'default'}.`;
-            }
-
-            // Safeguard: Move bedtime earlier to keep 8h window if static wakeup is threatened
+            // 8-Hour Safeguard
             let checkWake = targetWake;
             let checkBed = targetBed % 1440;
             if (checkWake <= checkBed) checkWake += 1440;
 
             if ((checkWake - checkBed) < 480) {
                 targetBed = targetWake - 480;
-                safety.innerHTML = "⚠️ 8-Hour Minimum Safeguard Applied";
-            } else {
-                safety.innerHTML = "";
+                document.getElementById('safety-info').innerHTML = "⚠️ 8-Hour Minimum Safeguard Applied";
             }
 
             document.getElementById('res-bed').innerHTML = mToT(targetBed);
