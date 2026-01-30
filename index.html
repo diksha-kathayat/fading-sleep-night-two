@@ -80,14 +80,12 @@
                     <p id="avg-vals" class="data-value text-emerald-700">-- / --</p>
                 </div>
             </div>
-            <p class="text-[10px] text-slate-400 mt-4 text-center font-medium italic">Format: SOL / WASO (minutes)</p>
         </div>
     </div>
 
     <script>
         const p = new URLSearchParams(window.location.search);
 
-        // Smart Parser: Handles dots, colons, and missing AM/PM
         const tToM = (t) => {
             if (!t) return 0;
             let str = t.toLowerCase().trim();
@@ -100,24 +98,24 @@
             if (isPm && h < 12) h += 12;
             if (isAm && h === 12) h = 0;
             if (!isAm && !isPm) {
-                if (h >= 1 && h <= 7) { /* assume AM */ }
-                else if (h >= 8 && h <= 11) h += 12;
+                if (h >= 1 && h <= 7) { /* assume morning AM */ }
+                else if (h >= 8 && h <= 11) h += 12; // assume night PM
             }
             return (h * 60) + m;
         };
 
-        // Formatter: 12hr with PM/AM
         const mToT = (m) => {
-            let totalMins = Math.round(m / 5) * 5;
-            while (totalMins < 0) totalMins += 1440;
-            totalMins %= 1440;
+            let tm = Math.round(m / 5) * 5;
+            while (tm < 0) tm += 1440;
+            tm %= 1440;
 
-            let h = Math.floor(totalMins / 60);
-            let mins = totalMins % 60;
+            let h = Math.floor(tm / 60);
+            let mins = tm % 60;
 
             const ampm = h >= 12 ? 'PM' : 'AM';
             h = h % 12 || 12;
 
+            // Fix: All AM/PM suffixes now use the same consistent slate-500 color
             return `${h}:${String(mins).padStart(2, '0')}<span class="text-base ml-1 font-bold text-slate-500">${ampm}</span>`;
         };
 
@@ -127,18 +125,19 @@
             const safety = document.getElementById('safety-info');
             const avgCard = document.getElementById('averaging-card');
 
-            let targetBed, targetWake;
-
             const dateStr = p.get('date_val');
             let isAdjustmentPhase = false;
             if (dateStr) {
                 const parts = dateStr.split('/');
                 const logDate = new Date(parts[2], parts[0] - 1, parts[1]);
-                const switchDate = new Date(2026, 0, 30);
-                if (logDate >= switchDate) isAdjustmentPhase = true;
+                if (logDate >= new Date(2026, 0, 30)) isAdjustmentPhase = true;
             }
 
-            if (isAdjustmentPhase && p.has('day_8_SOL') && p.has('sleep_intervention_SOL')) {
+            // Target Wake is strictly anchored to base_wake
+            const targetWake = tToM(p.get('base_wake') || "07:00");
+            let targetBed;
+
+            if (isAdjustmentPhase && p.has('day_8_SOL')) {
                 statusTag.innerText = "Phase: Rolling Adjustment";
                 statusTag.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-emerald-600 text-white tracking-widest";
                 avgCard.classList.remove('hidden');
@@ -146,7 +145,6 @@
                 const s1 = parseInt(p.get('day_8_SOL')), w1 = parseInt(p.get('day_8_WASO'));
                 const s2 = parseInt(p.get('sleep_intervention_SOL')), w2 = parseInt(p.get('sleep_intervention_WASO'));
                 const anchorBed = tToM(p.get('sleep_intervention_bedtime'));
-                targetWake = tToM(p.get('sleep_intervention_wakeup_time'));
 
                 const avgSol = (s1 + s2) / 2;
                 const avgWaso = (w1 + w2) / 2;
@@ -155,29 +153,24 @@
                 document.getElementById('d9-vals').innerText = `${s2}m / ${w2}m`;
                 document.getElementById('avg-vals').innerText = `${avgSol}m / ${avgWaso}m`;
 
-                if (avgSol <= 15 && avgWaso <= 15) {
-                    targetBed = anchorBed - 15;
-                    logic.innerHTML = `Efficiency Goal Met. Bedtime moved 15m earlier.`;
-                } else {
-                    targetBed = anchorBed + 15;
-                    logic.innerHTML = `Efficiency Goal Not Met. Bedtime moved 15m later.`;
-                }
-
+                targetBed = (avgSol <= 15 && avgWaso <= 15) ? anchorBed - 15 : anchorBed + 15;
+                logic.innerHTML = `Prescription based on efficiency. Wakeup remains static.`;
             } else {
                 statusTag.innerText = "Phase: Initial Static";
                 statusTag.className = "inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 bg-indigo-600 text-white tracking-widest";
                 avgCard.classList.add('hidden');
 
-                const bBed = tToM(p.get('base_bed') || "21:08");
-                targetWake = tToM(p.get('base_wake') || "09:27");
-                targetBed = bBed + parseInt(p.get('base_sol') || 16) + parseInt(p.get('base_waso') || 21) + 30;
-                logic.innerHTML = `Baseline Phase active. Adjustments begin Jan 30.`;
+                const bBed = tToM(p.get('base_bed') || "21:00");
+                targetBed = bBed + parseInt(p.get('base_sol') || 15) + parseInt(p.get('base_waso') || 15) + 30;
+                logic.innerHTML = `Baseline Phase active. Wakeup anchor set to ${p.get('base_wake') || 'default'}.`;
             }
 
-            let wakeInMins = targetWake;
-            let bedInMins = targetBed % 1440;
-            if (wakeInMins <= bedInMins) wakeInMins += 1440;
-            if ((wakeInMins - bedInMins) < 480) {
+            // Safeguard: Move bedtime earlier to keep 8h window if static wakeup is threatened
+            let checkWake = targetWake;
+            let checkBed = targetBed % 1440;
+            if (checkWake <= checkBed) checkWake += 1440;
+
+            if ((checkWake - checkBed) < 480) {
                 targetBed = targetWake - 480;
                 safety.innerHTML = "⚠️ 8-Hour Minimum Safeguard Applied";
             } else {
