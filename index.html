@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Sleep Intervention: Night 7 & 8 Analysis</title>
+    <title>Sleep Intervention: Rolling Analysis</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
@@ -54,10 +54,10 @@
                     (Anchor)</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-2">
                     <div class="flex justify-between">
-                        <span>Night 7 Bedtime:</span> <span id="bt-1" class="math-font">--:--</span>
+                        <span>Night 7 (Day 8) Bedtime:</span> <span id="bt-1" class="math-font">--:--</span>
                     </div>
                     <div class="flex justify-between">
-                        <span>Night 8 Bedtime:</span> <span id="bt-2" class="math-font">--:--</span>
+                        <span>Night 8 (Interv.) Bedtime:</span> <span id="bt-2" class="math-font">--:--</span>
                     </div>
                     <div class="flex justify-between border-t border-slate-200 pt-2 text-indigo-600">
                         <span class="font-bold uppercase">Average Anchor:</span> <span id="anchor-val"
@@ -67,14 +67,14 @@
             </div>
 
             <div class="space-y-2">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 2: 2-Night Efficiency Avg
-                    (Night 7 & 8)</p>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 2: Efficiency Avg (Night 7
+                    & 8)</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-2">
                     <div class="flex justify-between border-b border-slate-200 pb-1">
-                        <span>Average SOL:</span> <span id="avg-sol" class="math-font">--m</span>
+                        <span>Avg SOL (Day 8 & Interv.):</span> <span id="avg-sol" class="math-font">--m</span>
                     </div>
                     <div class="flex justify-between">
-                        <span>Average WASO:</span> <span id="avg-waso" class="math-font">--m</span>
+                        <span>Avg WASO (Day 8 & Interv.):</span> <span id="avg-waso" class="math-font">--m</span>
                     </div>
                 </div>
             </div>
@@ -83,8 +83,7 @@
                 <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 3: Apply Prescription Rule
                 </p>
                 <div id="logic-box" class="p-3 rounded-xl border-2 border-dashed flex items-center justify-between">
-                    <span id="logic-text" class="text-[11px] font-medium text-slate-700 italic">Processing
-                        metrics...</span>
+                    <span id="logic-text" class="text-[11px] font-medium text-slate-700 italic">Processing...</span>
                     <span id="logic-shift" class="text-xs font-black px-2 py-1 rounded-lg">--</span>
                 </div>
             </div>
@@ -92,13 +91,13 @@
             <div id="safeguard-row"
                 class="hidden bg-amber-50 p-3 rounded-xl border border-amber-100 flex items-center gap-2">
                 <span class="text-lg">⚠️</span>
-                <span class="text-[11px] text-amber-800 leading-tight font-bold">Safeguard Active: Bedtime set to
-                    maintain 8-hour window.</span>
+                <span class="text-[11px] text-amber-800 leading-tight font-bold">Safeguard: Minimum 8-hour window
+                    enforced.</span>
             </div>
 
             <button onclick="resetHistory()"
                 class="w-full text-[9px] text-slate-300 underline uppercase tracking-widest hover:text-red-400 transition-colors">Reset
-                Nightly History</button>
+                Calculation History</button>
         </div>
     </div>
 
@@ -128,8 +127,8 @@
         };
 
         function resetHistory() {
-            if (confirm("Clear history? This will reset the Night 7 anchor to your base diary average.")) {
-                localStorage.removeItem('stored_bt_night7');
+            if (confirm("Reset rolling history?")) {
+                localStorage.removeItem('stored_bt_n7');
                 location.reload();
             }
         }
@@ -137,32 +136,35 @@
         function calculate() {
             const targetWake = tToM(p.get('base_wake') || "07:00");
 
-            // Step 1: Manage Bedtime History (Night 7 and Night 8)
-            let n7 = localStorage.getItem('stored_bt_night7');
-            let n8 = p.get('sleep_intervention_bedtime') || p.get('base_bed');
+            // Mapping: Night 7 (Day 8) and Night 8 (Intervention)
+            let n7_bed = localStorage.getItem('stored_bt_n7') || p.get('day_8_bedtime');
+            let n8_bed = p.get('sleep_intervention_bedtime');
 
-            if (!n7) n7 = p.get('base_bed'); // Fallback to base diary if no history exists
+            // Fallbacks
+            if (!n7_bed) n7_bed = p.get('base_bed');
+            if (!n8_bed) n8_bed = n7_bed;
 
-            const n7Mins = tToM(n7);
-            const n8Mins = tToM(n8);
+            const n7Mins = tToM(n7_bed);
+            const n8Mins = tToM(n8_bed);
             const anchorMins = (n7Mins + n8Mins) / 2;
 
             document.getElementById('bt-1').innerText = mToT(n7Mins, true);
             document.getElementById('bt-2').innerText = mToT(n8Mins, true);
             document.getElementById('anchor-val').innerText = mToT(anchorMins, true);
 
-            // Step 2: Efficiency (SOL/WASO)
+            // Mapping SOL/WASO for Day 8 and Intervention
             const s7 = parseInt(p.get('day_8_SOL') || 0), w7 = parseInt(p.get('day_8_WASO') || 0);
             const s8 = parseInt(p.get('sleep_intervention_SOL') || 0), w8 = parseInt(p.get('sleep_intervention_WASO') || 0);
-            const avgS = (s7 + s8) / 2, avgW = (w7 + w8) / 2;
 
+            const avgS = (s7 + s8) / 2, avgW = (w7 + w8) / 2;
             document.getElementById('avg-sol').innerText = avgS + "m";
             document.getElementById('avg-waso').innerText = avgW + "m";
 
-            // Step 3: Shift
+            // Calculation
             const success = (avgS <= 15 && avgW <= 15);
             let targetBed = success ? anchorMins - 15 : anchorMins + 15;
 
+            // Display Logic
             const box = document.getElementById('logic-box');
             const shift = document.getElementById('logic-shift');
             if (success) {
@@ -177,7 +179,7 @@
                 document.getElementById('logic-text').innerText = "Goals not met; window condensed.";
             }
 
-            // Step 4: Safeguard
+            // Safeguard
             let checkWake = targetWake;
             let checkBed = targetBed % 1440;
             if (checkWake <= checkBed) checkWake += 1440;
@@ -186,8 +188,8 @@
                 document.getElementById('safeguard-row').classList.remove('hidden');
             }
 
-            // Persistence: Night 8 data becomes tomorrow's "Night 7"
-            localStorage.setItem('stored_bt_night7', n8);
+            // Persistence: Night 8 bedtime becomes tomorrow's "Night 7" bedtime
+            localStorage.setItem('stored_bt_n7', n8_bed);
 
             document.getElementById('res-bed').innerHTML = mToT(targetBed);
             document.getElementById('res-wake').innerHTML = mToT(targetWake);
