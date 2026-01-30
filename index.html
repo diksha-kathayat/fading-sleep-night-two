@@ -61,6 +61,9 @@
             <div class="mt-6 p-4 bg-indigo-50/30 rounded-xl space-y-2">
                 <p id="logic-info" class="text-xs text-indigo-900 font-medium italic"></p>
                 <p id="safety-info" class="text-[10px] text-amber-600 font-bold uppercase tracking-tight"></p>
+                <button onclick="resetHistory()"
+                    class="mt-2 text-[9px] text-slate-400 underline uppercase tracking-tighter hover:text-red-400">Reset
+                    Rolling History</button>
             </div>
         </div>
 
@@ -96,9 +99,7 @@
             let h = parseInt(parts[0]) || 0, m = parseInt(parts[1]) || 0;
             if (isPm && h < 12) h += 12;
             if (isAm && h === 12) h = 0;
-            if (!isAm && !isPm) {
-                if (h >= 8 && h <= 11) h += 12;
-            }
+            if (!isAm && !isPm && h >= 8 && h <= 11) h += 12;
             return (h * 60) + m;
         };
 
@@ -112,38 +113,56 @@
             return `${h}:${String(mins).padStart(2, '0')}<span class="text-base ml-1 font-bold text-slate-500">${ampm}</span>`;
         };
 
-        function calculate() {
-            // Inputs: base_wake, prev_bed, s1, w1, s2, w2
-            const targetWake = tToM(p.get('base_wake') || "07:00");
-            const anchorBed = tToM(p.get('prev_bed') || "23:00");
+        function resetHistory() {
+            localStorage.removeItem('rolling_bedtime_anchor');
+            location.reload();
+        }
 
-            const s1 = parseInt(p.get('s1') || 0), w1 = parseInt(p.get('w1') || 0);
-            const s2 = parseInt(p.get('s2') || 0), w2 = parseInt(p.get('w2') || 0);
+        function calculate() {
+            // 1. Wakeup Anchor (Always from URL)
+            const targetWake = tToM(p.get('base_wake') || "07:00");
+
+            // 2. Rolling History Logic
+            // Priority 1: Stored value in Browser (localStorage)
+            // Priority 2: Latest intervention value from URL
+            // Priority 3: Initial base bedtime from URL
+            let storedAnchor = localStorage.getItem('rolling_bedtime_anchor');
+            let urlAnchor = p.get('sleep_intervention_bedtime') || p.get('base_bed');
+
+            let anchorBedMins = storedAnchor ? parseInt(storedAnchor) : tToM(urlAnchor);
+
+            // 3. Data from URL
+            const s1 = parseInt(p.get('day_8_SOL') || 0);
+            const w1 = parseInt(p.get('day_8_WASO') || 0);
+            const s2 = parseInt(p.get('sleep_intervention_SOL') || 0);
+            const w2 = parseInt(p.get('sleep_intervention_WASO') || 0);
 
             const avgSol = (s1 + s2) / 2;
             const avgWaso = (w1 + w2) / 2;
 
-            // Display Table
             document.getElementById('d1-vals').innerText = `${s1}m / ${w1}m`;
             document.getElementById('d2-vals').innerText = `${s2}m / ${w2}m`;
             document.getElementById('avg-vals').innerText = `${avgSol}m / ${avgWaso}m`;
 
-            // Logic: Pure Adjustment
-            let targetBed = (avgSol <= 15 && avgWaso <= 15) ? anchorBed - 15 : anchorBed + 15;
-            document.getElementById('logic-info').innerHTML = `Bedtime adjusted 15m from previous anchor (${mToT(anchorBed)}).`;
+            // 4. Calculate Adjustment
+            let targetBed = (avgSol <= 15 && avgWaso <= 15) ? anchorBedMins - 15 : anchorBedMins + 15;
 
-            // 8-Hour Safeguard
+            // 5. Safeguard
             let checkWake = targetWake;
             let checkBed = targetBed % 1440;
             if (checkWake <= checkBed) checkWake += 1440;
-
             if ((checkWake - checkBed) < 480) {
                 targetBed = targetWake - 480;
                 document.getElementById('safety-info').innerHTML = "⚠️ 8-Hour Minimum Safeguard Applied";
             }
 
+            // 6. Persistence: Store this calculation for next time
+            localStorage.setItem('rolling_bedtime_anchor', targetBed);
+
+            // Display
             document.getElementById('res-bed').innerHTML = mToT(targetBed);
             document.getElementById('res-wake').innerHTML = mToT(targetWake);
+            document.getElementById('logic-info').innerHTML = `Rolling adjustment calculated from anchor: ${mToT(anchorBedMins)}`;
         }
 
         window.onload = calculate;
