@@ -136,24 +136,23 @@
         }
 
         function calculate() {
-            // 1. Determine Night Labels
             const dayNum = parseInt(p.get('day') || 9);
             document.querySelectorAll('.curr-n').forEach(e => e.innerText = dayNum - 1);
             document.querySelectorAll('.prev-n').forEach(e => e.innerText = dayNum - 2);
 
-            // 2. Fetch "Current" Data from the Day 8 data slots
+            // 1. DATA ENTRY: Pull current night's data from the Day 8 slots
             const currBed = p.get('sleep_intervention_bedtime');
             const currSOL = parseInt(p.get('day_8_SOL') || 0);
             const currWASO = parseInt(p.get('day_8_WASO') || 0);
             const targetWake = tToM(p.get('base_wake') || "07:00");
 
-            // 3. Fetch "Previous" Data from LocalStorage (Persistence)
-            // If no history exists, it defaults to the current values (no change)
-            const prevBed = localStorage.getItem('last_bedtime') || currBed;
-            const prevSOL = parseInt(localStorage.getItem('last_sol') || currSOL);
-            const prevWASO = parseInt(localStorage.getItem('last_waso') || currWASO);
+            // 2. DATA MEMORY: Fetch the "Previous" data stored from the last calculation
+            // If it's the very first time (Night 8/9), use the URL params for Day 8 as baseline
+            const prevBed = localStorage.getItem('last_bedtime') || p.get('day_8_bedtime') || currBed;
+            const prevSOL = localStorage.getItem('last_sol') !== null ? parseInt(localStorage.getItem('last_sol')) : parseInt(p.get('day_8_SOL') || 0);
+            const prevWASO = localStorage.getItem('last_waso') !== null ? parseInt(localStorage.getItem('last_waso')) : parseInt(p.get('day_8_WASO') || 0);
 
-            // UI Updates for Breakdown
+            // 3. DISPLAY: Show the two numbers being averaged
             document.getElementById('bt-1').innerText = mToT(tToM(prevBed), true);
             document.getElementById('bt-2').innerText = mToT(tToM(currBed), true);
             document.getElementById('s-prev').innerText = prevSOL;
@@ -161,7 +160,7 @@
             document.getElementById('w-prev').innerText = prevWASO;
             document.getElementById('w-curr').innerText = currWASO;
 
-            // 4. Calculate Averages
+            // 4. CALCULATION: Perform the 2-night rolling average
             const anchorMins = (tToM(prevBed) + tToM(currBed)) / 2;
             const avgS = (prevSOL + currSOL) / 2;
             const avgW = (prevWASO + currWASO) / 2;
@@ -170,7 +169,7 @@
             document.getElementById('avg-sol').innerText = avgS + "m";
             document.getElementById('avg-waso').innerText = avgW + "m";
 
-            // 5. Apply Rules
+            // 5. DECISION: Prescription Logic
             const success = (avgS <= 15 && avgW <= 15);
             let targetBed = success ? anchorMins - 15 : anchorMins + 15;
 
@@ -179,14 +178,14 @@
             if (success) {
                 box.className = "p-3 rounded-xl border-2 border-dashed border-emerald-100 bg-emerald-50/30 flex items-center justify-between";
                 shift.innerText = "-15m";
-                document.getElementById('logic-text').innerText = "Goals met; window expanding.";
+                document.getElementById('logic-text').innerText = "Efficiency goals met; window expanding.";
             } else {
                 box.className = "p-3 rounded-xl border-2 border-dashed border-amber-100 bg-amber-50/30 flex items-center justify-between";
                 shift.innerText = "+15m";
                 document.getElementById('logic-text').innerText = "Goals missed; window condensed.";
             }
 
-            // 6. Save current data to be the "Previous" data for the next visit
+            // 6. UPDATE MEMORY: Save current values so they become "Prev" for the next day
             localStorage.setItem('last_bedtime', currBed);
             localStorage.setItem('last_sol', currSOL);
             localStorage.setItem('last_waso', currWASO);
