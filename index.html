@@ -8,9 +8,15 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
 
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
-            background: #f8fafc;
         }
 
         .data-label {
@@ -29,30 +35,34 @@
     </style>
 </head>
 
-<body class="p-6">
+<body class="p-4">
     <div class="max-w-xl mx-auto space-y-6">
-        <div class="bg-white rounded-[2.5rem] p-8 shadow-xl border border-slate-200 text-center">
+        <div class="bg-transparent p-4 text-center">
             <div id="status-tag"
                 class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 tracking-widest"></div>
 
-            <div class="grid grid-cols-2 gap-4 bg-slate-50 p-8 rounded-3xl border-2 border-dashed border-indigo-200">
+            <div class="grid grid-cols-2 gap-2 p-6 rounded-3xl border-2 border-dashed border-indigo-200 bg-transparent">
                 <div>
-                    <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Target Bedtime</p>
-                    <div id="res-bed" class="text-5xl font-extrabold text-slate-800">--:--</div>
+                    <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-2">Target Bedtime</p>
+                    <div id="res-bed"
+                        class="text-3xl font-extrabold text-slate-800 tracking-tighter leading-tight whitespace-nowrap">
+                        --:--</div>
                 </div>
                 <div>
-                    <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Target Wake Up</p>
-                    <div id="res-wake" class="text-5xl font-extrabold text-slate-800">--:--</div>
+                    <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-2">Target Wake Up</p>
+                    <div id="res-wake"
+                        class="text-3xl font-extrabold text-slate-800 tracking-tighter leading-tight whitespace-nowrap">
+                        --:--</div>
                 </div>
             </div>
 
-            <div class="mt-6 p-4 bg-indigo-50/50 rounded-xl space-y-2">
+            <div class="mt-6 p-4 bg-indigo-50/30 rounded-xl space-y-2">
                 <p id="logic-info" class="text-xs text-indigo-900 font-medium italic"></p>
                 <p id="safety-info" class="text-[10px] text-amber-600 font-bold uppercase tracking-tight"></p>
             </div>
         </div>
 
-        <div id="averaging-card" class="hidden bg-white rounded-3xl p-6 shadow-md border border-slate-100">
+        <div id="averaging-card" class="hidden bg-transparent rounded-3xl p-6 border border-slate-200">
             <h3 class="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
                 <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> 2-Night Performance Review
             </h3>
@@ -65,7 +75,7 @@
                     <p class="data-label">Day 9 Log</p>
                     <p id="d9-vals" class="data-value">-- / --</p>
                 </div>
-                <div class="bg-emerald-50 rounded-xl py-2 space-y-1 border border-emerald-100">
+                <div class="bg-emerald-50/50 rounded-xl py-2 space-y-1 border border-emerald-100">
                     <p class="data-label text-emerald-600">Average</p>
                     <p id="avg-vals" class="data-value text-emerald-700">-- / --</p>
                 </div>
@@ -77,11 +87,38 @@
     <script>
         const p = new URLSearchParams(window.location.search);
 
-        const tToM = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return (h * 60) + m; };
+        // Smart Parser: Handles dots, colons, and missing AM/PM
+        const tToM = (t) => {
+            if (!t) return 0;
+            let str = t.toLowerCase().trim();
+            const isPm = str.includes('pm');
+            const isAm = str.includes('am');
+            const parts = str.replace(/[apm\s]/g, '').split(/[:.\s]/);
+            let h = parseInt(parts[0]) || 0;
+            let m = parseInt(parts[1]) || 0;
+
+            if (isPm && h < 12) h += 12;
+            if (isAm && h === 12) h = 0;
+            if (!isAm && !isPm) {
+                if (h >= 1 && h <= 7) { /* assume AM */ }
+                else if (h >= 8 && h <= 11) h += 12;
+            }
+            return (h * 60) + m;
+        };
+
+        // Formatter: 12hr with PM/AM
         const mToT = (m) => {
-            let tm = Math.round(m / 5) * 5;
-            while (tm < 0) tm += 1440;
-            return String(Math.floor(tm / 60) % 24).padStart(2, '0') + ":" + String(tm % 60).padStart(2, '0');
+            let totalMins = Math.round(m / 5) * 5;
+            while (totalMins < 0) totalMins += 1440;
+            totalMins %= 1440;
+
+            let h = Math.floor(totalMins / 60);
+            let mins = totalMins % 60;
+
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+
+            return `${h}:${String(mins).padStart(2, '0')}<span class="text-base ml-1 font-bold text-slate-500">${ampm}</span>`;
         };
 
         function calculate() {
@@ -114,7 +151,6 @@
                 const avgSol = (s1 + s2) / 2;
                 const avgWaso = (w1 + w2) / 2;
 
-                // Update Table Display
                 document.getElementById('d8-vals').innerText = `${s1}m / ${w1}m`;
                 document.getElementById('d9-vals').innerText = `${s2}m / ${w2}m`;
                 document.getElementById('avg-vals').innerText = `${avgSol}m / ${avgWaso}m`;
@@ -133,25 +169,23 @@
                 avgCard.classList.add('hidden');
 
                 const bBed = tToM(p.get('base_bed') || "21:08");
-                const bSol = parseInt(p.get('base_sol') || 16);
-                const bWaso = parseInt(p.get('base_waso') || 21);
                 targetWake = tToM(p.get('base_wake') || "09:27");
-
-                targetBed = bBed + bSol + bWaso + 30;
+                targetBed = bBed + parseInt(p.get('base_sol') || 16) + parseInt(p.get('base_waso') || 21) + 30;
                 logic.innerHTML = `Baseline Phase active. Adjustments begin Jan 30.`;
             }
 
-            let tempWake = targetWake;
-            if (tempWake <= (targetBed % 1440)) tempWake += 1440;
-            if ((tempWake - (targetBed % 1440)) < 480) {
+            let wakeInMins = targetWake;
+            let bedInMins = targetBed % 1440;
+            if (wakeInMins <= bedInMins) wakeInMins += 1440;
+            if ((wakeInMins - bedInMins) < 480) {
                 targetBed = targetWake - 480;
                 safety.innerHTML = "⚠️ 8-Hour Minimum Safeguard Applied";
             } else {
                 safety.innerHTML = "";
             }
 
-            document.getElementById('res-bed').innerText = mToT(targetBed);
-            document.getElementById('res-wake').innerText = mToT(targetWake);
+            document.getElementById('res-bed').innerHTML = mToT(targetBed);
+            document.getElementById('res-wake').innerHTML = mToT(targetWake);
         }
 
         window.onload = calculate;
