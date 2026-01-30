@@ -47,21 +47,21 @@
 
         <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
             <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Rolling
-                Calculation (Night <span class="prev-n">N-1</span> + Night <span class="curr-n">N</span>)</h3>
+                Calculation (Night <span class="prev-n">--</span> + <span class="curr-n">--</span>)</h3>
 
             <div class="space-y-2">
                 <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 1: Bedtime Average</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-2">
                     <div class="flex justify-between">
-                        <span>Night <span class="prev-n">--</span> (Stored):</span> <span id="bt-1"
+                        <span>Night <span class="prev-n">--</span>:</span> <span id="bt-1"
                             class="math-font text-slate-400">--:--</span>
                     </div>
                     <div class="flex justify-between">
-                        <span>Night <span class="curr-n">--</span> (New):</span> <span id="bt-2"
+                        <span>Night <span class="curr-n">--</span>:</span> <span id="bt-2"
                             class="math-font text-indigo-600">--:--</span>
                     </div>
                     <div class="flex justify-between border-t border-slate-200 pt-2 text-indigo-600">
-                        <span class="font-bold uppercase">Rolling Anchor:</span> <span id="anchor-val"
+                        <span class="font-bold uppercase">Average Anchor:</span> <span id="anchor-val"
                             class="math-font">--:--</span>
                     </div>
                 </div>
@@ -72,7 +72,8 @@
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-3">
                     <div class="space-y-1">
                         <div class="flex justify-between text-slate-500">
-                            <span>SOL: (Prev: <span id="s-prev">0</span>m + New: <span id="s-curr">0</span>m) / 2</span>
+                            <span>SOL: (Night <span class="prev-n">--</span>: <span id="s-prev">0</span>m + Night <span
+                                    class="curr-n">--</span>: <span id="s-curr">0</span>m) / 2</span>
                         </div>
                         <div class="flex justify-between font-bold text-slate-700">
                             <span>Avg SOL:</span> <span id="avg-sol" class="math-font">--m</span>
@@ -80,8 +81,8 @@
                     </div>
                     <div class="space-y-1 border-t border-slate-200 pt-2">
                         <div class="flex justify-between text-slate-500">
-                            <span>WASO: (Prev: <span id="w-prev">0</span>m + New: <span id="w-curr">0</span>m) /
-                                2</span>
+                            <span>WASO: (Night <span class="prev-n">--</span>: <span id="w-prev">0</span>m + Night <span
+                                    class="curr-n">--</span>: <span id="w-curr">0</span>m) / 2</span>
                         </div>
                         <div class="flex justify-between font-bold text-slate-700">
                             <span>Avg WASO:</span> <span id="avg-waso" class="math-font">--m</span>
@@ -100,7 +101,7 @@
 
             <button onclick="resetHistory()"
                 class="w-full text-[9px] text-slate-300 underline uppercase tracking-widest hover:text-red-400 transition-colors">Reset
-                History</button>
+                Rolling History</button>
         </div>
     </div>
 
@@ -129,7 +130,7 @@
         };
 
         function resetHistory() {
-            if (confirm("Clear rolling memory?")) {
+            if (confirm("Reset all rolling memory?")) {
                 localStorage.clear();
                 location.reload();
             }
@@ -140,19 +141,24 @@
             document.querySelectorAll('.curr-n').forEach(e => e.innerText = dayNum - 1);
             document.querySelectorAll('.prev-n').forEach(e => e.innerText = dayNum - 2);
 
-            // 1. DATA ENTRY: Pull current night's data from the Day 8 slots
+            // 1. DATA ENTRY: Current values from URL
             const currBed = p.get('sleep_intervention_bedtime');
             const currSOL = parseInt(p.get('day_8_SOL') || 0);
             const currWASO = parseInt(p.get('day_8_WASO') || 0);
             const targetWake = tToM(p.get('base_wake') || "07:00");
 
-            // 2. DATA MEMORY: Fetch the "Previous" data stored from the last calculation
-            // If it's the very first time (Night 8/9), use the URL params for Day 8 as baseline
+            // 2. DATA MEMORY: Baseline fallbacks match your "stored day_8" request
             const prevBed = localStorage.getItem('last_bedtime') || p.get('day_8_bedtime') || currBed;
-            const prevSOL = localStorage.getItem('last_sol') !== null ? parseInt(localStorage.getItem('last_sol')) : parseInt(p.get('day_8_SOL') || 0);
-            const prevWASO = localStorage.getItem('last_waso') !== null ? parseInt(localStorage.getItem('last_waso')) : parseInt(p.get('day_8_WASO') || 0);
 
-            // 3. DISPLAY: Show the two numbers being averaged
+            // SOL Fallback Logic
+            const storedSOL = localStorage.getItem('last_sol');
+            const prevSOL = (storedSOL !== null) ? parseInt(storedSOL) : parseInt(p.get('day_8_SOL') || 0);
+
+            // WASO Fallback Logic
+            const storedWASO = localStorage.getItem('last_waso');
+            const prevWASO = (storedWASO !== null) ? parseInt(storedWASO) : parseInt(p.get('day_8_WASO') || 0);
+
+            // 3. DISPLAY
             document.getElementById('bt-1').innerText = mToT(tToM(prevBed), true);
             document.getElementById('bt-2').innerText = mToT(tToM(currBed), true);
             document.getElementById('s-prev').innerText = prevSOL;
@@ -160,7 +166,7 @@
             document.getElementById('w-prev').innerText = prevWASO;
             document.getElementById('w-curr').innerText = currWASO;
 
-            // 4. CALCULATION: Perform the 2-night rolling average
+            // 4. CALCULATION (Average of Night N-1 and Night N)
             const anchorMins = (tToM(prevBed) + tToM(currBed)) / 2;
             const avgS = (prevSOL + currSOL) / 2;
             const avgW = (prevWASO + currWASO) / 2;
@@ -169,7 +175,7 @@
             document.getElementById('avg-sol').innerText = avgS + "m";
             document.getElementById('avg-waso').innerText = avgW + "m";
 
-            // 5. DECISION: Prescription Logic
+            // 5. DECISION Logic
             const success = (avgS <= 15 && avgW <= 15);
             let targetBed = success ? anchorMins - 15 : anchorMins + 15;
 
@@ -185,7 +191,7 @@
                 document.getElementById('logic-text').innerText = "Goals missed; window condensed.";
             }
 
-            // 6. UPDATE MEMORY: Save current values so they become "Prev" for the next day
+            // 6. UPDATE MEMORY for tomorrow
             localStorage.setItem('last_bedtime', currBed);
             localStorage.setItem('last_sol', currSOL);
             localStorage.setItem('last_waso', currWASO);
