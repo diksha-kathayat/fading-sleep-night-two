@@ -46,22 +46,22 @@
         </div>
 
         <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
-            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Rolling Comparison
-                (Night <span class="prev-n">--</span> vs <span class="curr-n">--</span>)</h3>
+            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Rolling
+                Calculation (Night <span class="prev-n">N-1</span> + Night <span class="curr-n">N</span>)</h3>
 
             <div class="space-y-2">
                 <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 1: Bedtime Average</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-2">
                     <div class="flex justify-between">
-                        <span>Night <span class="prev-n">--</span>:</span> <span id="bt-1"
+                        <span>Night <span class="prev-n">--</span> (Stored):</span> <span id="bt-1"
                             class="math-font text-slate-400">--:--</span>
                     </div>
                     <div class="flex justify-between">
-                        <span>Night <span class="curr-n">--</span>:</span> <span id="bt-2"
+                        <span>Night <span class="curr-n">--</span> (New):</span> <span id="bt-2"
                             class="math-font text-indigo-600">--:--</span>
                     </div>
                     <div class="flex justify-between border-t border-slate-200 pt-2 text-indigo-600">
-                        <span class="font-bold uppercase">Average Anchor:</span> <span id="anchor-val"
+                        <span class="font-bold uppercase">Rolling Anchor:</span> <span id="anchor-val"
                             class="math-font">--:--</span>
                     </div>
                 </div>
@@ -71,28 +71,19 @@
                 <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 2: Efficiency Average</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-3">
                     <div class="space-y-1">
-                        <div class="flex justify-between text-slate-400">
-                            <span>Night <span class="prev-n">--</span> SOL:</span> <span id="s-prev"
-                                class="math-font">--m</span>
+                        <div class="flex justify-between text-slate-500">
+                            <span>SOL: (Prev: <span id="s-prev">0</span>m + New: <span id="s-curr">0</span>m) / 2</span>
                         </div>
-                        <div class="flex justify-between text-indigo-600">
-                            <span>Night <span class="curr-n">--</span> SOL:</span> <span id="s-curr"
-                                class="math-font">--m</span>
-                        </div>
-                        <div class="flex justify-between font-bold text-slate-700 border-t border-slate-200 pt-1">
+                        <div class="flex justify-between font-bold text-slate-700">
                             <span>Avg SOL:</span> <span id="avg-sol" class="math-font">--m</span>
                         </div>
                     </div>
-                    <div class="space-y-1 pt-2">
-                        <div class="flex justify-between text-slate-400">
-                            <span>Night <span class="prev-n">--</span> WASO:</span> <span id="w-prev"
-                                class="math-font">--m</span>
+                    <div class="space-y-1 border-t border-slate-200 pt-2">
+                        <div class="flex justify-between text-slate-500">
+                            <span>WASO: (Prev: <span id="w-prev">0</span>m + New: <span id="w-curr">0</span>m) /
+                                2</span>
                         </div>
-                        <div class="flex justify-between text-indigo-600">
-                            <span>Night <span class="curr-n">--</span> WASO:</span> <span id="w-curr"
-                                class="math-font">--m</span>
-                        </div>
-                        <div class="flex justify-between font-bold text-slate-700 border-t border-slate-200 pt-1">
+                        <div class="flex justify-between font-bold text-slate-700">
                             <span>Avg WASO:</span> <span id="avg-waso" class="math-font">--m</span>
                         </div>
                     </div>
@@ -109,7 +100,7 @@
 
             <button onclick="resetHistory()"
                 class="w-full text-[9px] text-slate-300 underline uppercase tracking-widest hover:text-red-400 transition-colors">Reset
-                Rolling History</button>
+                History</button>
         </div>
     </div>
 
@@ -138,60 +129,48 @@
         };
 
         function resetHistory() {
-            if (confirm("Reset all rolling data?")) {
+            if (confirm("Clear rolling memory?")) {
                 localStorage.clear();
                 location.reload();
             }
         }
 
         function calculate() {
-            // Determine labels based on 'day' parameter
+            // 1. Determine Night Labels
             const dayNum = parseInt(p.get('day') || 9);
-            const currentNightLabel = dayNum - 1;
-            const previousNightLabel = dayNum - 2;
-            document.querySelectorAll('.curr-n').forEach(e => e.innerText = currentNightLabel);
-            document.querySelectorAll('.prev-n').forEach(e => e.innerText = previousNightLabel);
+            document.querySelectorAll('.curr-n').forEach(e => e.innerText = dayNum - 1);
+            document.querySelectorAll('.prev-n').forEach(e => e.innerText = dayNum - 2);
 
-            // Current Data (incoming via Day 8 slots)
-            const currBed = p.get('sleep_intervention_bedtime') || "10:00 PM";
+            // 2. Fetch "Current" Data from the Day 8 data slots
+            const currBed = p.get('sleep_intervention_bedtime');
             const currSOL = parseInt(p.get('day_8_SOL') || 0);
             const currWASO = parseInt(p.get('day_8_WASO') || 0);
             const targetWake = tToM(p.get('base_wake') || "07:00");
 
-            // Previous Data (Historical/Stored)
-            // If Day 9, we pull from Day 8 specific historical params. 
-            // If Day 10+, we pull from what we stored last time.
-            let prevBed, prevSOL, prevWASO;
+            // 3. Fetch "Previous" Data from LocalStorage (Persistence)
+            // If no history exists, it defaults to the current values (no change)
+            const prevBed = localStorage.getItem('last_bedtime') || currBed;
+            const prevSOL = parseInt(localStorage.getItem('last_sol') || currSOL);
+            const prevWASO = parseInt(localStorage.getItem('last_waso') || currWASO);
 
-            if (dayNum <= 9) {
-                prevBed = p.get('day_8_bedtime') || currBed;
-                prevSOL = parseInt(p.get('day_7_SOL') || currSOL); // Baseline Day 7
-                prevWASO = parseInt(p.get('day_7_WASO') || currWASO);
-            } else {
-                prevBed = localStorage.getItem('roll_bed') || currBed;
-                prevSOL = parseInt(localStorage.getItem('roll_sol') || currSOL);
-                prevWASO = parseInt(localStorage.getItem('roll_waso') || currWASO);
-            }
+            // UI Updates for Breakdown
+            document.getElementById('bt-1').innerText = mToT(tToM(prevBed), true);
+            document.getElementById('bt-2').innerText = mToT(tToM(currBed), true);
+            document.getElementById('s-prev').innerText = prevSOL;
+            document.getElementById('s-curr').innerText = currSOL;
+            document.getElementById('w-prev').innerText = prevWASO;
+            document.getElementById('w-curr').innerText = currWASO;
 
-            // Calculations
+            // 4. Calculate Averages
             const anchorMins = (tToM(prevBed) + tToM(currBed)) / 2;
             const avgS = (prevSOL + currSOL) / 2;
             const avgW = (prevWASO + currWASO) / 2;
 
-            // UI Display
-            document.getElementById('bt-1').innerText = mToT(tToM(prevBed), true);
-            document.getElementById('bt-2').innerText = mToT(tToM(currBed), true);
             document.getElementById('anchor-val').innerText = mToT(anchorMins, true);
-
-            document.getElementById('s-prev').innerText = prevSOL + "m";
-            document.getElementById('s-curr').innerText = currSOL + "m";
             document.getElementById('avg-sol').innerText = avgS + "m";
-
-            document.getElementById('w-prev').innerText = prevWASO + "m";
-            document.getElementById('w-curr').innerText = currWASO + "m";
             document.getElementById('avg-waso').innerText = avgW + "m";
 
-            // Logic Decision
+            // 5. Apply Rules
             const success = (avgS <= 15 && avgW <= 15);
             let targetBed = success ? anchorMins - 15 : anchorMins + 15;
 
@@ -200,17 +179,17 @@
             if (success) {
                 box.className = "p-3 rounded-xl border-2 border-dashed border-emerald-100 bg-emerald-50/30 flex items-center justify-between";
                 shift.innerText = "-15m";
-                document.getElementById('logic-text').innerText = "Efficiency goals met.";
+                document.getElementById('logic-text').innerText = "Goals met; window expanding.";
             } else {
                 box.className = "p-3 rounded-xl border-2 border-dashed border-amber-100 bg-amber-50/30 flex items-center justify-between";
                 shift.innerText = "+15m";
-                document.getElementById('logic-text').innerText = "Goals not met; condensing window.";
+                document.getElementById('logic-text').innerText = "Goals missed; window condensed.";
             }
 
-            // Store current as previous for next session
-            localStorage.setItem('roll_bed', currBed);
-            localStorage.setItem('roll_sol', currSOL);
-            localStorage.setItem('roll_waso', currWASO);
+            // 6. Save current data to be the "Previous" data for the next visit
+            localStorage.setItem('last_bedtime', currBed);
+            localStorage.setItem('last_sol', currSOL);
+            localStorage.setItem('last_waso', currWASO);
 
             document.getElementById('res-bed').innerHTML = mToT(targetBed);
             document.getElementById('res-wake').innerHTML = mToT(targetWake);
