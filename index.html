@@ -28,7 +28,7 @@
         }
 
         .data-value {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             color: #1e293b;
         }
@@ -36,7 +36,7 @@
 </head>
 
 <body class="p-4">
-    <div class="max-w-xl mx-auto space-y-6">
+    <div class="max-w-xl mx-auto space-y-4">
         <div class="bg-transparent p-4 text-center">
             <div id="status-tag"
                 class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-6 tracking-widest bg-emerald-600 text-white">
@@ -61,30 +61,41 @@
             <div class="mt-6 p-4 bg-indigo-50/30 rounded-xl space-y-2">
                 <p id="logic-info" class="text-xs text-indigo-900 font-medium italic"></p>
                 <p id="safety-info" class="text-[10px] text-amber-600 font-bold uppercase tracking-tight"></p>
-                <button onclick="resetHistory()"
-                    class="mt-2 text-[9px] text-slate-400 underline uppercase tracking-tighter hover:text-red-400">Reset
-                    Rolling History</button>
             </div>
         </div>
 
-        <div id="averaging-card" class="bg-transparent rounded-3xl p-6 border border-slate-200">
-            <h3 class="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-                <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> 2-Night Performance Review
+        <div id="averaging-card" class="bg-transparent rounded-3xl p-5 border border-slate-200">
+            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> 2-Night Rolling Calculation
             </h3>
-            <div class="grid grid-cols-3 gap-4 text-center">
-                <div class="space-y-1">
-                    <p class="data-label">Night 1</p>
-                    <p id="d1-vals" class="data-value">-- / --</p>
+            <div class="grid grid-cols-2 gap-4 text-center">
+                <div class="p-3 bg-slate-50/50 rounded-2xl border border-slate-100">
+                    <p class="data-label mb-1">Current Anchor</p>
+                    <p id="anchor-val" class="text-lg font-extrabold text-slate-600">--:--</p>
+                    <p id="anchor-source" class="text-[9px] text-slate-400 uppercase font-bold mt-1 tracking-tighter">
+                    </p>
                 </div>
-                <div class="space-y-1">
-                    <p class="data-label">Night 2</p>
-                    <p id="d2-vals" class="data-value">-- / --</p>
-                </div>
-                <div class="bg-emerald-50/50 rounded-xl py-2 space-y-1 border border-emerald-100">
-                    <p class="data-label text-emerald-600">Average</p>
-                    <p id="avg-vals" class="data-value text-emerald-700">-- / --</p>
+                <div class="p-3 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                    <p class="data-label text-emerald-600 mb-1">New Prescription</p>
+                    <p id="new-val" class="text-lg font-extrabold text-emerald-700">--:--</p>
+                    <p id="adj-direction" class="text-[9px] text-emerald-500 uppercase font-bold mt-1 tracking-tighter">
+                    </p>
                 </div>
             </div>
+
+            <div class="mt-4 grid grid-cols-2 gap-4 text-[10px] border-t border-slate-100 pt-4">
+                <div class="flex justify-between px-2">
+                    <span class="text-slate-400 font-bold uppercase">Avg SOL:</span>
+                    <span id="avg-sol-val" class="text-slate-700 font-black">--m</span>
+                </div>
+                <div class="flex justify-between px-2">
+                    <span class="text-slate-400 font-bold uppercase">Avg WASO:</span>
+                    <span id="avg-waso-val" class="text-slate-700 font-black">--m</span>
+                </div>
+            </div>
+            <button onclick="resetHistory()"
+                class="w-full mt-4 text-[9px] text-slate-300 underline uppercase tracking-widest hover:text-red-400 transition-colors">Clear
+                Saved History</button>
         </div>
     </div>
 
@@ -103,66 +114,80 @@
             return (h * 60) + m;
         };
 
-        const mToT = (m) => {
+        const mToT = (m, isSimple = false) => {
             let tm = Math.round(m / 5) * 5;
             while (tm < 0) tm += 1440;
             tm %= 1440;
             let h = Math.floor(tm / 60), mins = tm % 60;
             const ampm = h >= 12 ? 'PM' : 'AM';
             h = h % 12 || 12;
+            if (isSimple) return `${h}:${String(mins).padStart(2, '0')} ${ampm}`;
             return `${h}:${String(mins).padStart(2, '0')}<span class="text-base ml-1 font-bold text-slate-500">${ampm}</span>`;
         };
 
         function resetHistory() {
-            localStorage.removeItem('rolling_bedtime_anchor');
-            location.reload();
+            if (confirm("Are you sure you want to clear the rolling bedtime history?")) {
+                localStorage.removeItem('rolling_bedtime_anchor');
+                location.reload();
+            }
         }
 
         function calculate() {
-            // 1. Wakeup Anchor (Always from URL)
+            // 1. Wakeup Anchor
             const targetWake = tToM(p.get('base_wake') || "07:00");
 
-            // 2. Rolling History Logic
-            // Priority 1: Stored value in Browser (localStorage)
-            // Priority 2: Latest intervention value from URL
-            // Priority 3: Initial base bedtime from URL
+            // 2. Rolling Anchor Discovery
             let storedAnchor = localStorage.getItem('rolling_bedtime_anchor');
-            let urlAnchor = p.get('sleep_intervention_bedtime') || p.get('base_bed');
+            let anchorSourceText = "Browser Memory";
+            let anchorBedMins;
 
-            let anchorBedMins = storedAnchor ? parseInt(storedAnchor) : tToM(urlAnchor);
+            if (storedAnchor) {
+                anchorBedMins = parseInt(storedAnchor);
+            } else {
+                // First night: prioritize intervention bedtime, then base_bed
+                let urlAnchor = p.get('sleep_intervention_bedtime') || p.get('base_bed');
+                anchorBedMins = tToM(urlAnchor);
+                anchorSourceText = p.get('sleep_intervention_bedtime') ? "Intervention Input" : "Base Diary Average";
+            }
 
-            // 3. Data from URL
+            // 3. Performance Data
             const s1 = parseInt(p.get('day_8_SOL') || 0);
             const w1 = parseInt(p.get('day_8_WASO') || 0);
             const s2 = parseInt(p.get('sleep_intervention_SOL') || 0);
             const w2 = parseInt(p.get('sleep_intervention_WASO') || 0);
-
             const avgSol = (s1 + s2) / 2;
             const avgWaso = (w1 + w2) / 2;
 
-            document.getElementById('d1-vals').innerText = `${s1}m / ${w1}m`;
-            document.getElementById('d2-vals').innerText = `${s2}m / ${w2}m`;
-            document.getElementById('avg-vals').innerText = `${avgSol}m / ${avgWaso}m`;
+            // 4. Prescription Logic
+            const goalMet = (avgSol <= 15 && avgWaso <= 15);
+            let targetBed = goalMet ? anchorBedMins - 15 : anchorBedMins + 15;
 
-            // 4. Calculate Adjustment
-            let targetBed = (avgSol <= 15 && avgWaso <= 15) ? anchorBedMins - 15 : anchorBedMins + 15;
-
-            // 5. Safeguard
+            // 5. Safeguard (Wakeup Anchor is priority)
             let checkWake = targetWake;
             let checkBed = targetBed % 1440;
             if (checkWake <= checkBed) checkWake += 1440;
             if ((checkWake - checkBed) < 480) {
                 targetBed = targetWake - 480;
-                document.getElementById('safety-info').innerHTML = "⚠️ 8-Hour Minimum Safeguard Applied";
+                document.getElementById('safety-info').innerHTML = "⚠️ 8-Hour Safeguard Applied";
             }
 
-            // 6. Persistence: Store this calculation for next time
+            // 6. Display and Save
             localStorage.setItem('rolling_bedtime_anchor', targetBed);
 
-            // Display
             document.getElementById('res-bed').innerHTML = mToT(targetBed);
             document.getElementById('res-wake').innerHTML = mToT(targetWake);
-            document.getElementById('logic-info').innerHTML = `Rolling adjustment calculated from anchor: ${mToT(anchorBedMins)}`;
+
+            // Comparison Card Update
+            document.getElementById('anchor-val').innerText = mToT(anchorBedMins, true);
+            document.getElementById('anchor-source').innerText = anchorSourceText;
+            document.getElementById('new-val').innerText = mToT(targetBed, true);
+            document.getElementById('adj-direction').innerText = goalMet ? "-15m (Earlier)" : "+15m (Later)";
+            document.getElementById('avg-sol-val').innerText = avgSol + "m";
+            document.getElementById('avg-waso-val').innerText = avgWaso + "m";
+
+            document.getElementById('logic-info').innerHTML = goalMet
+                ? "Goals met! Moving bedtime 15 minutes earlier."
+                : "Efficiency needs improvement. Bedtime moved 15m later.";
         }
 
         window.onload = calculate;
