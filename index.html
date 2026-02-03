@@ -3,85 +3,71 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Sleep Intervention: Two-Night Plateau Analysis</title>
+    <title>Sleep Intervention: Two-Night Plateau</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
 
-        html,
         body {
-            margin: 0;
-            padding: 0;
+            font-family: 'Inter', sans-serif;
             background: transparent;
         }
 
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-
-        .math-font {
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
+        .log-row:nth-child(even) {
+            background-color: #f8fafc;
         }
     </style>
 </head>
 
 <body class="p-4">
     <div class="max-w-xl mx-auto space-y-4">
-        <div class="bg-transparent p-4 text-center border-b border-slate-100 pb-6">
-            <div id="status-tag"
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm text-center">
+            <div
                 class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-4 tracking-widest bg-indigo-600 text-white">
-                Night <span id="step-display">1</span>: <span id="phase-label">Initializing</span>
+                Night <span id="step-display">1</span>
             </div>
             <div class="grid grid-cols-2 gap-4">
-                <div class="p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
+                <div class="p-4 rounded-3xl bg-slate-50 border border-slate-100">
                     <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Prescribed Bedtime
                     </p>
                     <div id="res-bed" class="text-3xl font-extrabold text-slate-800 tracking-tighter">--:--</div>
                 </div>
-                <div class="p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
+                <div class="p-4 rounded-3xl bg-slate-50 border border-slate-100">
                     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Target Wake Up</p>
                     <div id="res-wake" class="text-3xl font-extrabold text-slate-800 tracking-tighter">--:--</div>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
-            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Rolling Plateau
-                Logic</h3>
-
-            <div class="space-y-2">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Anchor Analysis</p>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-2">
-                    <div class="flex justify-between">
-                        <span>Current Cycle:</span>
-                        <span id="cycle-mode" class="font-bold text-indigo-600 uppercase">Calculating...</span>
-                    </div>
-                    <div class="flex justify-between border-t border-slate-200 pt-2 text-slate-700 font-bold">
-                        <span>Last Instruction:</span> <span id="anchor-val">--:--</span>
-                    </div>
-                </div>
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Cycle Status</h3>
+            <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span id="cycle-mode" class="text-[11px] font-bold text-indigo-600 uppercase">Step 1</span>
+                <span id="logic-shift"
+                    class="text-xs font-black px-2 py-1 rounded bg-slate-200 text-slate-600 uppercase">--</span>
             </div>
+            <p id="logic-text" class="text-[11px] text-slate-500 italic text-center px-2"></p>
+        </div>
 
-            <div class="space-y-2">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Efficiency Averages</p>
-                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-3">
-                    <div class="flex justify-between text-slate-500"><span>Avg SOL:</span> <span id="avg-sol"
-                            class="font-bold text-slate-700">--m</span></div>
-                    <div class="border-t border-slate-200 pt-1 flex justify-between text-slate-500"><span>Avg
-                            WASO:</span> <span id="avg-waso" class="font-bold text-slate-700">--m</span></div>
-                </div>
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
+            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-3 mb-3">Prescription
+                History</h3>
+            <div class="overflow-hidden rounded-xl border border-slate-100">
+                <table class="w-full text-[11px] text-left">
+                    <thead class="bg-slate-50 text-slate-400 uppercase font-bold">
+                        <tr>
+                            <th class="px-4 py-2">Night</th>
+                            <th class="px-4 py-2">Instruction</th>
+                            <th class="px-4 py-2 text-right">Target</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-log">
+                    </tbody>
+                </table>
             </div>
-
-            <div id="logic-box" class="p-3 rounded-xl border-2 border-dashed flex items-center justify-between">
-                <span id="logic-text"
-                    class="text-[11px] font-medium text-slate-700 italic font-bold uppercase">Processing...</span>
-                <span id="logic-shift" class="text-xs font-black px-2 py-1 rounded-lg">--</span>
-            </div>
-
-            <button onclick="resetHistory()"
-                class="w-full text-[9px] text-slate-300 underline uppercase tracking-widest hover:text-red-400 transition-colors">Clear
-                Local Memory & Restart</button>
+            <button onclick="localStorage.clear(); location.reload();"
+                class="w-full mt-4 text-[9px] text-slate-300 underline uppercase tracking-widest hover:text-red-400">Restart
+                Intervention Cycle</button>
         </div>
     </div>
 
@@ -105,8 +91,6 @@
             return simple ? `${h}:${String(mins).padStart(2, '0')} ${ampm}` : `${h}:${String(mins).padStart(2, '0')}<span class="text-xs ml-1 font-bold text-slate-400">${ampm}</span>`;
         };
 
-        function resetHistory() { localStorage.clear(); location.reload(); }
-
         function calculate() {
             let step = parseInt(localStorage.getItem('calc_step') || "1");
             document.getElementById('step-display').innerText = step;
@@ -118,73 +102,63 @@
             const sInter = parseFloat(p.get('sleep_intervention_SOL') || 0);
             const wInter = parseFloat(p.get('sleep_intervention_WASO') || 0);
 
-            let prevSOL, currSOL, prevWASO, currWASO;
+            let avgS, avgW;
+            if (step <= 2) {
+                avgS = (s7 + s8) / 2; avgW = (w7 + w8) / 2;
+            } else {
+                const lastS = parseFloat(localStorage.getItem('last_s') || sInter);
+                const lastW = parseFloat(localStorage.getItem('last_w') || wInter);
+                avgS = (lastS + sInter) / 2; avgW = (lastW + wInter) / 2;
+            }
+
             let finalTarget;
             let lastStored = localStorage.getItem('stored_prescription');
-
-            // 1. Efficiency Check (Stays consistent)
-            if (step === 1) {
-                prevSOL = s7; currSOL = s8;
-                prevWASO = w7; currWASO = w8;
-            } else {
-                prevSOL = parseFloat(localStorage.getItem('last_s') || sInter);
-                currSOL = sInter;
-                prevWASO = parseFloat(localStorage.getItem('last_w') || wInter);
-                currWASO = wInter;
-            }
-            const avgS = (prevSOL + currSOL) / 2;
-            const avgW = (prevWASO + currWASO) / 2;
-            const success = (avgS <= 15 && avgW <= 15);
-
-            // 2. Plateau Step Logic
-            // Step 1, 3, 5, 7... = ADJUST
-            // Step 2, 4, 6, 8... = HOLD
-            const isAdjustmentStep = (step % 2 !== 0);
+            let mode = "";
+            let shiftLabel = "";
 
             if (step === 1) {
-                // Initialize from Phase 1 Logic
                 const bBed = tToM(p.get('base_bed') || "21:08");
                 const bSol = parseInt(p.get('base_sol') || 16);
                 const bWaso = parseInt(p.get('base_waso') || 21);
-                const initialAnchor = (bBed + bSol + bWaso + 30);
-
-                finalTarget = success ? initialAnchor - 15 : initialAnchor + 15;
-                document.getElementById('cycle-mode').innerText = "ADJUST (N1)";
-                document.getElementById('anchor-val').innerText = mToT(initialAnchor, true);
-            }
-            else if (isAdjustmentStep) {
-                // Odd numbered steps take the previous prescription and apply +/- 15m
+                finalTarget = (bBed + bSol + bWaso + 30);
+                mode = "N1: INITIAL";
+                shiftLabel = "START";
+            } else if (step % 2 !== 0) {
                 let anchor = parseInt(lastStored);
+                const success = (avgS <= 15 && avgW <= 15);
                 finalTarget = success ? anchor - 15 : anchor + 15;
-                document.getElementById('cycle-mode').innerText = "ADJUST (NEW)";
-                document.getElementById('anchor-val').innerText = mToT(anchor, true);
-            }
-            else {
-                // Even numbered steps (2, 4, 6...) HOLD the previous value
+                mode = "N" + step + ": ADJUST";
+                shiftLabel = success ? "-15M" : "+15M";
+            } else {
                 finalTarget = parseInt(lastStored);
-                document.getElementById('cycle-mode').innerText = "HOLD PLATEAU";
-                document.getElementById('anchor-val').innerText = mToT(finalTarget, true);
+                mode = "N" + step + ": HOLD";
+                shiftLabel = "HOLD";
             }
 
-            // 3. UI Update
-            document.getElementById('avg-sol').innerText = avgS.toFixed(1) + "m";
-            document.getElementById('avg-waso').innerText = avgW.toFixed(1) + "m";
+            // Update UI
+            document.getElementById('cycle-mode').innerText = mode;
+            document.getElementById('logic-shift').innerText = shiftLabel;
             document.getElementById('res-bed').innerHTML = mToT(finalTarget);
             document.getElementById('res-wake').innerHTML = mToT(tToM(p.get('base_wake') || "07:00"));
 
-            const box = document.getElementById('logic-box');
-            const shift = document.getElementById('logic-shift');
-            if (isAdjustmentStep) {
-                shift.innerText = success ? "-15m" : "+15m";
-                box.className = "p-3 rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/30 flex items-center justify-between";
-                document.getElementById('logic-text').innerText = "CALCULATED NEW TARGET";
-            } else {
-                shift.innerText = "HOLD";
-                box.className = "p-3 rounded-xl border-2 border-dashed border-slate-100 bg-slate-50 flex items-center justify-between";
-                document.getElementById('logic-text').innerText = "STAYING ON PLATEAU";
+            // Log History
+            let history = JSON.parse(localStorage.getItem('presc_history') || "[]");
+            // Only add to history if this step isn't already logged (prevents duplicates on refresh)
+            if (history.length < step) {
+                history.push({ night: step, mode: shiftLabel, time: mToT(finalTarget, true) });
+                localStorage.setItem('presc_history', JSON.stringify(history));
             }
 
-            // 4. Persistence
+            const logBody = document.getElementById('history-log');
+            logBody.innerHTML = history.map(item => `
+                <tr class="log-row">
+                    <td class="px-4 py-2 font-bold text-slate-400">${item.night}</td>
+                    <td class="px-4 py-2 text-slate-600">${item.mode}</td>
+                    <td class="px-4 py-2 text-right font-mono font-bold text-indigo-600">${item.time}</td>
+                </tr>
+            `).reverse().join('');
+
+            // Save state
             localStorage.setItem('last_s', sInter);
             localStorage.setItem('last_w', wInter);
             localStorage.setItem('stored_prescription', finalTarget);
