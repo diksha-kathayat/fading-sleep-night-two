@@ -50,15 +50,15 @@
             </h3>
 
             <div class="space-y-2">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 1: Prescribed Bedtime
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 1: Double-Prescription
                     Anchor</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-2">
                     <div class="flex justify-between">
-                        <span>Basis:</span>
+                        <span>Anchor Basis:</span>
                         <span id="anchor-source" class="italic text-slate-400">Loading...</span>
                     </div>
                     <div class="flex justify-between border-t border-slate-200 pt-2 text-indigo-600 font-bold">
-                        <span>Current Anchor:</span> <span id="anchor-val">--:--</span>
+                        <span>Avg Prescribed Anchor:</span> <span id="anchor-val">--:--</span>
                     </div>
                 </div>
             </div>
@@ -117,8 +117,8 @@
         function calculate() {
             let step = parseInt(localStorage.getItem('calc_step') || "1");
             let prescribedAnchorMins;
+            let prevSOL, currSOL, prevWASO, currWASO;
 
-            // Efficiency Data (Maintaining your original sources)
             const s7 = parseFloat(p.get('day_7_SOL') || 0);
             const w7 = parseFloat(p.get('day_7_WASO') || 0);
             const s8 = parseFloat(p.get('day_8_SOL') || 0);
@@ -126,29 +126,32 @@
             const sInter = parseFloat(p.get('sleep_intervention_SOL') || 0);
             const wInter = parseFloat(p.get('sleep_intervention_WASO') || 0);
 
-            // Step 1: Initial Hand-off (Phase 1 Logic)
             if (step === 1) {
-                document.getElementById('phase-label').innerText = "Phase 2: Step 1 (Hand-off)";
-                document.getElementById('anchor-source').innerText = "Phase 1 Static Logic";
+                document.getElementById('phase-label').innerText = "Phase 2: Step 1 (Double Initialization)";
+                document.getElementById('anchor-source').innerText = "Initial Prescription (N-1 & N-2 identical)";
 
-                // Mimic Phase 1 Static Calculation: base_bed + base_sol + base_waso + 30
                 const bBed = tToM(p.get('base_bed') || "21:08");
                 const bSol = parseInt(p.get('base_sol') || 16);
                 const bWaso = parseInt(p.get('base_waso') || 21);
 
-                // If tracker provides a prev_bed, use that, otherwise use static calc
-                prescribedAnchorMins = p.has('prev_bed') ? tToM(p.get('prev_bed')) : (bBed + bSol + bWaso + 30);
+                // Initial calculation from Phase 1 Logic
+                prescribedAnchorMins = (bBed + bSol + bWaso + 30);
+
+                // Store this same value for both previous slots to ensure the first "average" is this value
+                localStorage.setItem('presc_n1', prescribedAnchorMins);
+                localStorage.setItem('presc_n2', prescribedAnchorMins);
 
                 prevSOL = s7; currSOL = s8;
                 prevWASO = w7; currWASO = w8;
-            }
-            // Step 2 and beyond: Memory-based Prescription
-            else {
-                document.getElementById('phase-label').innerText = "Phase 2: Step " + step + " (Rolling)";
-                document.getElementById('anchor-source').innerText = "Stored Prescription";
+            } else {
+                document.getElementById('phase-label').innerText = "Phase 2: Step " + step + " (Rolling Averages)";
+                document.getElementById('anchor-source').innerText = "Avg of Prev 2 Prescriptions";
 
-                // Retrieve the target we set yesterday
-                prescribedAnchorMins = parseInt(localStorage.getItem('stored_prescription'));
+                const n1 = parseInt(localStorage.getItem('presc_n1'));
+                const n2 = parseInt(localStorage.getItem('presc_n2'));
+
+                // NEW ANCHOR: Average of the previous two prescribed bedtimes
+                prescribedAnchorMins = (n1 + n2) / 2;
 
                 if (step === 2) {
                     prevSOL = s8; currSOL = sInter;
@@ -163,12 +166,12 @@
 
             const avgS = (prevSOL + currSOL) / 2;
             const avgW = (prevWASO + currWASO) / 2;
-
-            // Decision Logic
             const success = (avgS <= 15 && avgW <= 15);
+
+            // Adjust based on the averaged prescription anchor
             let nextPrescription = success ? prescribedAnchorMins - 15 : prescribedAnchorMins + 15;
 
-            // UI Updates
+            // Update UI
             document.getElementById('s-prev').innerText = prevSOL;
             document.getElementById('s-curr').innerText = currSOL;
             document.getElementById('avg-sol').innerText = avgS.toFixed(1) + "m";
@@ -177,16 +180,18 @@
             document.getElementById('avg-waso').innerText = avgW.toFixed(1) + "m";
             document.getElementById('anchor-val').innerText = mToT(prescribedAnchorMins, true);
 
-            const box = document.getElementById('logic-box');
             const shift = document.getElementById('logic-shift');
             shift.innerText = success ? "-15m" : "+15m";
-            box.className = success ? "p-3 rounded-xl border-2 border-dashed border-emerald-100 bg-emerald-50/30 flex items-center justify-between" : "p-3 rounded-xl border-2 border-dashed border-amber-100 bg-amber-50/30 flex items-center justify-between";
-            document.getElementById('logic-text').innerText = success ? "Efficiency high. Advancing prescription." : "Efficiency low. Delaying prescription.";
+            document.getElementById('logic-text').innerText = success ? "Goal met. Advancing prescription." : "Goal not met. Delaying prescription.";
 
-            // Save for Next Step
+            // Save for Next Step: Shift the prescriptions (N1 becomes N2, New becomes N1)
             localStorage.setItem('last_s', currSOL);
             localStorage.setItem('last_w', currWASO);
-            localStorage.setItem('stored_prescription', nextPrescription);
+
+            const currentN1 = localStorage.getItem('presc_n1');
+            localStorage.setItem('presc_n2', currentN1); // Old N1 moves to N2
+            localStorage.setItem('presc_n1', nextPrescription); // Newest target moves to N1
+
             localStorage.setItem('calc_step', step + 1);
 
             document.getElementById('res-bed').innerHTML = mToT(nextPrescription);
