@@ -31,11 +31,12 @@
         <div class="bg-transparent p-4 text-center border-b border-slate-100 pb-6">
             <div id="status-tag"
                 class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-4 tracking-widest bg-indigo-600 text-white">
-                Step <span id="step-display">1</span>: <span id="phase-label">Initializing</span>
+                Night <span id="step-display">1</span>: <span id="phase-label">Initializing</span>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div class="p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
-                    <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Target Bedtime</p>
+                    <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Prescribed Bedtime
+                    </p>
                     <div id="res-bed" class="text-3xl font-extrabold text-slate-800 tracking-tighter">--:--</div>
                 </div>
                 <div class="p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
@@ -46,19 +47,18 @@
         </div>
 
         <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
-            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Prescription
-                Plateau Logic</h3>
+            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Rolling Plateau
+                Logic</h3>
 
             <div class="space-y-2">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Bedtime Anchor</p>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Anchor Analysis</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-2">
                     <div class="flex justify-between">
-                        <span>Mode:</span>
-                        <span id="anchor-source"
-                            class="font-bold text-indigo-600 uppercase tracking-tighter">Calculating...</span>
+                        <span>Current Cycle:</span>
+                        <span id="cycle-mode" class="font-bold text-indigo-600 uppercase">Calculating...</span>
                     </div>
                     <div class="flex justify-between border-t border-slate-200 pt-2 text-slate-700 font-bold">
-                        <span>Previous Target:</span> <span id="anchor-val">--:--</span>
+                        <span>Last Instruction:</span> <span id="anchor-val">--:--</span>
                     </div>
                 </div>
             </div>
@@ -66,14 +66,10 @@
             <div class="space-y-2">
                 <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Efficiency Averages</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-3">
-                    <div>
-                        <div class="flex justify-between text-slate-500"><span>Avg SOL (Last 2):</span> <span
-                                id="avg-sol" class="font-bold text-slate-700">--m</span></div>
-                    </div>
-                    <div class="border-t border-slate-200 pt-1">
-                        <div class="flex justify-between text-slate-500"><span>Avg WASO (Last 2):</span> <span
-                                id="avg-waso" class="font-bold text-slate-700">--m</span></div>
-                    </div>
+                    <div class="flex justify-between text-slate-500"><span>Avg SOL:</span> <span id="avg-sol"
+                            class="font-bold text-slate-700">--m</span></div>
+                    <div class="border-t border-slate-200 pt-1 flex justify-between text-slate-500"><span>Avg
+                            WASO:</span> <span id="avg-waso" class="font-bold text-slate-700">--m</span></div>
                 </div>
             </div>
 
@@ -84,8 +80,8 @@
             </div>
 
             <button onclick="resetHistory()"
-                class="w-full text-[9px] text-slate-300 underline uppercase tracking-widest hover:text-red-400 transition-colors">Reset
-                Calculation Cycle</button>
+                class="w-full text-[9px] text-slate-300 underline uppercase tracking-widest hover:text-red-400 transition-colors">Clear
+                Local Memory & Restart</button>
         </div>
     </div>
 
@@ -123,10 +119,10 @@
             const wInter = parseFloat(p.get('sleep_intervention_WASO') || 0);
 
             let prevSOL, currSOL, prevWASO, currWASO;
-            let currentAnchor;
             let finalTarget;
+            let lastStored = localStorage.getItem('stored_prescription');
 
-            // EFFICIENCY CALCULATION (Stays the same)
+            // 1. Efficiency Check (Stays consistent)
             if (step === 1) {
                 prevSOL = s7; currSOL = s8;
                 prevWASO = w7; currWASO = w8;
@@ -138,43 +134,39 @@
             }
             const avgS = (prevSOL + currSOL) / 2;
             const avgW = (prevWASO + currWASO) / 2;
+            const success = (avgS <= 15 && avgW <= 15);
 
-            // PLATEAU LOGIC (Adjust every 2nd step)
-            // Steps 1, 3, 5... are ADJUSTMENT steps
-            // Steps 2, 4, 6... are HOLD steps
+            // 2. Plateau Step Logic
+            // Step 1, 3, 5, 7... = ADJUST
+            // Step 2, 4, 6, 8... = HOLD
             const isAdjustmentStep = (step % 2 !== 0);
 
             if (step === 1) {
-                // Initialize the very first prescription from Phase 1 Logic
+                // Initialize from Phase 1 Logic
                 const bBed = tToM(p.get('base_bed') || "21:08");
                 const bSol = parseInt(p.get('base_sol') || 16);
                 const bWaso = parseInt(p.get('base_waso') || 21);
-                currentAnchor = (bBed + bSol + bWaso + 30);
+                const initialAnchor = (bBed + bSol + bWaso + 30);
 
-                const success = (avgS <= 15 && avgW <= 15);
-                finalTarget = success ? currentAnchor - 15 : currentAnchor + 15;
-
-                document.getElementById('anchor-source').innerText = "INITIAL ADJUSTMENT";
-                document.getElementById('anchor-val').innerText = mToT(currentAnchor, true);
+                finalTarget = success ? initialAnchor - 15 : initialAnchor + 15;
+                document.getElementById('cycle-mode').innerText = "ADJUST (N1)";
+                document.getElementById('anchor-val').innerText = mToT(initialAnchor, true);
             }
             else if (isAdjustmentStep) {
-                // Odd steps: Apply shift to the previous bedtime
-                currentAnchor = parseInt(localStorage.getItem('stored_prescription'));
-                const success = (avgS <= 15 && avgW <= 15);
-                finalTarget = success ? currentAnchor - 15 : currentAnchor + 15;
-
-                document.getElementById('anchor-source').innerText = "CALCULATING SHIFT";
-                document.getElementById('anchor-val').innerText = mToT(currentAnchor, true);
+                // Odd numbered steps take the previous prescription and apply +/- 15m
+                let anchor = parseInt(lastStored);
+                finalTarget = success ? anchor - 15 : anchor + 15;
+                document.getElementById('cycle-mode').innerText = "ADJUST (NEW)";
+                document.getElementById('anchor-val').innerText = mToT(anchor, true);
             }
             else {
-                // Even steps: Just take the previous value and hold it
-                finalTarget = parseInt(localStorage.getItem('stored_prescription'));
-
-                document.getElementById('anchor-source').innerText = "HOLDING PLATEAU";
+                // Even numbered steps (2, 4, 6...) HOLD the previous value
+                finalTarget = parseInt(lastStored);
+                document.getElementById('cycle-mode').innerText = "HOLD PLATEAU";
                 document.getElementById('anchor-val').innerText = mToT(finalTarget, true);
             }
 
-            // UI Rendering
+            // 3. UI Update
             document.getElementById('avg-sol').innerText = avgS.toFixed(1) + "m";
             document.getElementById('avg-waso').innerText = avgW.toFixed(1) + "m";
             document.getElementById('res-bed').innerHTML = mToT(finalTarget);
@@ -183,19 +175,18 @@
             const box = document.getElementById('logic-box');
             const shift = document.getElementById('logic-shift');
             if (isAdjustmentStep) {
-                const isEarlier = (finalTarget < currentAnchor);
-                shift.innerText = isEarlier ? "-15m" : "+15m";
+                shift.innerText = success ? "-15m" : "+15m";
                 box.className = "p-3 rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/30 flex items-center justify-between";
-                document.getElementById('logic-text').innerText = "ADJUSTMENT APPLIED";
+                document.getElementById('logic-text').innerText = "CALCULATED NEW TARGET";
             } else {
-                shift.innerText = "0m";
+                shift.innerText = "HOLD";
                 box.className = "p-3 rounded-xl border-2 border-dashed border-slate-100 bg-slate-50 flex items-center justify-between";
-                document.getElementById('logic-text').innerText = "PLATEAU: NO CHANGE";
+                document.getElementById('logic-text').innerText = "STAYING ON PLATEAU";
             }
 
-            // Save State
-            localStorage.setItem('last_s', currSOL);
-            localStorage.setItem('last_w', currWASO);
+            // 4. Persistence
+            localStorage.setItem('last_s', sInter);
+            localStorage.setItem('last_w', wInter);
             localStorage.setItem('stored_prescription', finalTarget);
             localStorage.setItem('calc_step', step + 1);
         }
