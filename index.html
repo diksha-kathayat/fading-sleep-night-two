@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Sleep Intervention: Rolling Analysis</title>
+    <title>Sleep Intervention: Two-Night Plateau Analysis</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
@@ -31,7 +31,7 @@
         <div class="bg-transparent p-4 text-center border-b border-slate-100 pb-6">
             <div id="status-tag"
                 class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-4 tracking-widest bg-indigo-600 text-white">
-                Rolling Phase: <span id="phase-label">Initializing</span>
+                Step <span id="step-display">1</span>: <span id="phase-label">Initializing</span>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div class="p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
@@ -46,43 +46,40 @@
         </div>
 
         <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
-            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Rolling Comparison
-            </h3>
+            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Prescription
+                Plateau Logic</h3>
 
             <div class="space-y-2">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 1: Double-Prescription
-                    Anchor</p>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Bedtime Anchor</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-2">
                     <div class="flex justify-between">
-                        <span>Anchor Basis:</span>
-                        <span id="anchor-source" class="italic text-slate-400">Loading...</span>
+                        <span>Mode:</span>
+                        <span id="anchor-source"
+                            class="font-bold text-indigo-600 uppercase tracking-tighter">Calculating...</span>
                     </div>
-                    <div class="flex justify-between border-t border-slate-200 pt-2 text-indigo-600 font-bold">
-                        <span>Avg Prescribed Anchor:</span> <span id="anchor-val">--:--</span>
+                    <div class="flex justify-between border-t border-slate-200 pt-2 text-slate-700 font-bold">
+                        <span>Previous Target:</span> <span id="anchor-val">--:--</span>
                     </div>
                 </div>
             </div>
 
             <div class="space-y-2">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Step 2: Efficiency Averages</p>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Efficiency Averages</p>
                 <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] space-y-3">
                     <div>
-                        <div class="flex justify-between text-slate-500"><span>SOL: (N-1: <span id="s-prev">0</span> +
-                                N: <span id="s-curr">0</span>) / 2</span></div>
-                        <div class="flex justify-between font-bold text-slate-700"><span>Avg SOL:</span> <span
-                                id="avg-sol">--m</span></div>
+                        <div class="flex justify-between text-slate-500"><span>Avg SOL (Last 2):</span> <span
+                                id="avg-sol" class="font-bold text-slate-700">--m</span></div>
                     </div>
-                    <div class="border-t border-slate-200 pt-2">
-                        <div class="flex justify-between text-slate-500"><span>WASO: (N-1: <span id="w-prev">0</span> +
-                                N: <span id="w-curr">0</span>) / 2</span></div>
-                        <div class="flex justify-between font-bold text-slate-700"><span>Avg WASO:</span> <span
-                                id="avg-waso">--m</span></div>
+                    <div class="border-t border-slate-200 pt-1">
+                        <div class="flex justify-between text-slate-500"><span>Avg WASO (Last 2):</span> <span
+                                id="avg-waso" class="font-bold text-slate-700">--m</span></div>
                     </div>
                 </div>
             </div>
 
             <div id="logic-box" class="p-3 rounded-xl border-2 border-dashed flex items-center justify-between">
-                <span id="logic-text" class="text-[11px] font-medium text-slate-700 italic">Processing...</span>
+                <span id="logic-text"
+                    class="text-[11px] font-medium text-slate-700 italic font-bold uppercase">Processing...</span>
                 <span id="logic-shift" class="text-xs font-black px-2 py-1 rounded-lg">--</span>
             </div>
 
@@ -116,8 +113,7 @@
 
         function calculate() {
             let step = parseInt(localStorage.getItem('calc_step') || "1");
-            let prescribedAnchorMins;
-            let prevSOL, currSOL, prevWASO, currWASO;
+            document.getElementById('step-display').innerText = step;
 
             const s7 = parseFloat(p.get('day_7_SOL') || 0);
             const w7 = parseFloat(p.get('day_7_WASO') || 0);
@@ -126,76 +122,82 @@
             const sInter = parseFloat(p.get('sleep_intervention_SOL') || 0);
             const wInter = parseFloat(p.get('sleep_intervention_WASO') || 0);
 
+            let prevSOL, currSOL, prevWASO, currWASO;
+            let currentAnchor;
+            let finalTarget;
+
+            // EFFICIENCY CALCULATION (Stays the same)
             if (step === 1) {
-                document.getElementById('phase-label').innerText = "Phase 2: Step 1 (Double Initialization)";
-                document.getElementById('anchor-source').innerText = "Initial Prescription (N-1 & N-2 identical)";
-
-                const bBed = tToM(p.get('base_bed') || "21:08");
-                const bSol = parseInt(p.get('base_sol') || 16);
-                const bWaso = parseInt(p.get('base_waso') || 21);
-
-                // Initial calculation from Phase 1 Logic
-                prescribedAnchorMins = (bBed + bSol + bWaso + 30);
-
-                // Store this same value for both previous slots to ensure the first "average" is this value
-                localStorage.setItem('presc_n1', prescribedAnchorMins);
-                localStorage.setItem('presc_n2', prescribedAnchorMins);
-
                 prevSOL = s7; currSOL = s8;
                 prevWASO = w7; currWASO = w8;
             } else {
-                document.getElementById('phase-label').innerText = "Phase 2: Step " + step + " (Rolling Averages)";
-                document.getElementById('anchor-source').innerText = "Avg of Prev 2 Prescriptions";
-
-                const n1 = parseInt(localStorage.getItem('presc_n1'));
-                const n2 = parseInt(localStorage.getItem('presc_n2'));
-
-                // NEW ANCHOR: Average of the previous two prescribed bedtimes
-                prescribedAnchorMins = (n1 + n2) / 2;
-
-                if (step === 2) {
-                    prevSOL = s8; currSOL = sInter;
-                    prevWASO = w8; currWASO = wInter;
-                } else {
-                    prevSOL = parseFloat(localStorage.getItem('last_s') || sInter);
-                    currSOL = sInter;
-                    prevWASO = parseFloat(localStorage.getItem('last_w') || wInter);
-                    currWASO = wInter;
-                }
+                prevSOL = parseFloat(localStorage.getItem('last_s') || sInter);
+                currSOL = sInter;
+                prevWASO = parseFloat(localStorage.getItem('last_w') || wInter);
+                currWASO = wInter;
             }
-
             const avgS = (prevSOL + currSOL) / 2;
             const avgW = (prevWASO + currWASO) / 2;
-            const success = (avgS <= 15 && avgW <= 15);
 
-            // Adjust based on the averaged prescription anchor
-            let nextPrescription = success ? prescribedAnchorMins - 15 : prescribedAnchorMins + 15;
+            // PLATEAU LOGIC (Adjust every 2nd step)
+            // Steps 1, 3, 5... are ADJUSTMENT steps
+            // Steps 2, 4, 6... are HOLD steps
+            const isAdjustmentStep = (step % 2 !== 0);
 
-            // Update UI
-            document.getElementById('s-prev').innerText = prevSOL;
-            document.getElementById('s-curr').innerText = currSOL;
+            if (step === 1) {
+                // Initialize the very first prescription from Phase 1 Logic
+                const bBed = tToM(p.get('base_bed') || "21:08");
+                const bSol = parseInt(p.get('base_sol') || 16);
+                const bWaso = parseInt(p.get('base_waso') || 21);
+                currentAnchor = (bBed + bSol + bWaso + 30);
+
+                const success = (avgS <= 15 && avgW <= 15);
+                finalTarget = success ? currentAnchor - 15 : currentAnchor + 15;
+
+                document.getElementById('anchor-source').innerText = "INITIAL ADJUSTMENT";
+                document.getElementById('anchor-val').innerText = mToT(currentAnchor, true);
+            }
+            else if (isAdjustmentStep) {
+                // Odd steps: Apply shift to the previous bedtime
+                currentAnchor = parseInt(localStorage.getItem('stored_prescription'));
+                const success = (avgS <= 15 && avgW <= 15);
+                finalTarget = success ? currentAnchor - 15 : currentAnchor + 15;
+
+                document.getElementById('anchor-source').innerText = "CALCULATING SHIFT";
+                document.getElementById('anchor-val').innerText = mToT(currentAnchor, true);
+            }
+            else {
+                // Even steps: Just take the previous value and hold it
+                finalTarget = parseInt(localStorage.getItem('stored_prescription'));
+
+                document.getElementById('anchor-source').innerText = "HOLDING PLATEAU";
+                document.getElementById('anchor-val').innerText = mToT(finalTarget, true);
+            }
+
+            // UI Rendering
             document.getElementById('avg-sol').innerText = avgS.toFixed(1) + "m";
-            document.getElementById('w-prev').innerText = prevWASO;
-            document.getElementById('w-curr').innerText = currWASO;
             document.getElementById('avg-waso').innerText = avgW.toFixed(1) + "m";
-            document.getElementById('anchor-val').innerText = mToT(prescribedAnchorMins, true);
+            document.getElementById('res-bed').innerHTML = mToT(finalTarget);
+            document.getElementById('res-wake').innerHTML = mToT(tToM(p.get('base_wake') || "07:00"));
 
+            const box = document.getElementById('logic-box');
             const shift = document.getElementById('logic-shift');
-            shift.innerText = success ? "-15m" : "+15m";
-            document.getElementById('logic-text').innerText = success ? "Goal met. Advancing prescription." : "Goal not met. Delaying prescription.";
+            if (isAdjustmentStep) {
+                const isEarlier = (finalTarget < currentAnchor);
+                shift.innerText = isEarlier ? "-15m" : "+15m";
+                box.className = "p-3 rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/30 flex items-center justify-between";
+                document.getElementById('logic-text').innerText = "ADJUSTMENT APPLIED";
+            } else {
+                shift.innerText = "0m";
+                box.className = "p-3 rounded-xl border-2 border-dashed border-slate-100 bg-slate-50 flex items-center justify-between";
+                document.getElementById('logic-text').innerText = "PLATEAU: NO CHANGE";
+            }
 
-            // Save for Next Step: Shift the prescriptions (N1 becomes N2, New becomes N1)
+            // Save State
             localStorage.setItem('last_s', currSOL);
             localStorage.setItem('last_w', currWASO);
-
-            const currentN1 = localStorage.getItem('presc_n1');
-            localStorage.setItem('presc_n2', currentN1); // Old N1 moves to N2
-            localStorage.setItem('presc_n1', nextPrescription); // Newest target moves to N1
-
+            localStorage.setItem('stored_prescription', finalTarget);
             localStorage.setItem('calc_step', step + 1);
-
-            document.getElementById('res-bed').innerHTML = mToT(nextPrescription);
-            document.getElementById('res-wake').innerHTML = mToT(tToM(p.get('base_wake') || "07:00"));
         }
         window.onload = calculate;
     </script>
