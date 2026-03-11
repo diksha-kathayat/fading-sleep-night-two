@@ -12,62 +12,30 @@
             font-family: 'Inter', sans-serif;
             background: transparent;
         }
-
-        .log-row:nth-child(even) {
-            background-color: #f8fafc;
-        }
     </style>
 </head>
 
 <body class="p-4">
-    <div class="max-w-xl mx-auto space-y-4">
+    <div class="max-w-xl mx-auto">
         <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm text-center">
-            <div
-                class="inline-block px-4 py-1 rounded-full text-[10px] font-black uppercase mb-4 tracking-widest bg-indigo-600 text-white">
-                Night <span id="step-display">1</span>
-            </div>
             <div class="grid grid-cols-2 gap-4">
                 <div class="p-4 rounded-3xl bg-slate-50 border border-slate-100">
-                    <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Prescribed Bedtime
+                    <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">Bedtime
                     </p>
                     <div id="res-bed" class="text-3xl font-extrabold text-slate-800 tracking-tighter">--:--</div>
                 </div>
                 <div class="p-4 rounded-3xl bg-slate-50 border border-slate-100">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Target Wake Up</p>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Wake Up</p>
                     <div id="res-wake" class="text-3xl font-extrabold text-slate-800 tracking-tighter">--:--</div>
                 </div>
             </div>
-        </div>
 
-        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
-            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-2">Cycle Status</h3>
-            <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <span id="cycle-mode" class="text-[11px] font-bold text-indigo-600 uppercase">Step 1</span>
-                <span id="logic-shift"
-                    class="text-xs font-black px-2 py-1 rounded bg-slate-200 text-slate-600 uppercase">--</span>
+            <div style="display:none">
+                <span id="step-display"></span>
+                <span id="cycle-mode"></span>
+                <span id="logic-shift"></span>
+                <div id="history-log"></div>
             </div>
-            <p id="logic-text" class="text-[11px] text-slate-500 italic text-center px-2"></p>
-        </div>
-
-        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
-            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b pb-3 mb-3">Prescription
-                History</h3>
-            <div class="overflow-hidden rounded-xl border border-slate-100">
-                <table class="w-full text-[11px] text-left">
-                    <thead class="bg-slate-50 text-slate-400 uppercase font-bold">
-                        <tr>
-                            <th class="px-4 py-2">Night</th>
-                            <th class="px-4 py-2">Instruction</th>
-                            <th class="px-4 py-2 text-right">Target</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history-log">
-                    </tbody>
-                </table>
-            </div>
-            <button onclick="localStorage.clear(); location.reload();"
-                class="w-full mt-4 text-[9px] text-slate-300 underline uppercase tracking-widest hover:text-red-400">Restart
-                Intervention Cycle</button>
         </div>
     </div>
 
@@ -93,7 +61,6 @@
 
         function calculate() {
             let step = parseInt(localStorage.getItem('calc_step') || "1");
-            document.getElementById('step-display').innerText = step;
 
             const s7 = parseFloat(p.get('day_7_SOL') || 0);
             const w7 = parseFloat(p.get('day_7_WASO') || 0);
@@ -113,7 +80,6 @@
 
             let finalTarget;
             let lastStored = localStorage.getItem('stored_prescription');
-            let mode = "";
             let shiftLabel = "";
 
             if (step === 1) {
@@ -121,44 +87,29 @@
                 const bSol = parseInt(p.get('base_sol') || 16);
                 const bWaso = parseInt(p.get('base_waso') || 21);
                 finalTarget = (bBed + bSol + bWaso + 30);
-                mode = "N1: INITIAL";
                 shiftLabel = "START";
             } else if (step % 2 !== 0) {
                 let anchor = parseInt(lastStored);
                 const success = (avgS <= 15 && avgW <= 15);
                 finalTarget = success ? anchor - 15 : anchor + 15;
-                mode = "N" + step + ": ADJUST";
                 shiftLabel = success ? "-15M" : "+15M";
             } else {
                 finalTarget = parseInt(lastStored);
-                mode = "N" + step + ": HOLD";
                 shiftLabel = "HOLD";
             }
 
-            // Update UI
-            document.getElementById('cycle-mode').innerText = mode;
-            document.getElementById('logic-shift').innerText = shiftLabel;
+            // Update visible UI
             document.getElementById('res-bed').innerHTML = mToT(finalTarget);
             document.getElementById('res-wake').innerHTML = mToT(tToM(p.get('base_wake') || "07:00"));
 
-            // Log History
+            // Internal Data Sync (Prevents script errors while keeping history logic)
             let history = JSON.parse(localStorage.getItem('presc_history') || "[]");
-            // Only add to history if this step isn't already logged (prevents duplicates on refresh)
             if (history.length < step) {
                 history.push({ night: step, mode: shiftLabel, time: mToT(finalTarget, true) });
                 localStorage.setItem('presc_history', JSON.stringify(history));
             }
 
-            const logBody = document.getElementById('history-log');
-            logBody.innerHTML = history.map(item => `
-                <tr class="log-row">
-                    <td class="px-4 py-2 font-bold text-slate-400">${item.night}</td>
-                    <td class="px-4 py-2 text-slate-600">${item.mode}</td>
-                    <td class="px-4 py-2 text-right font-mono font-bold text-indigo-600">${item.time}</td>
-                </tr>
-            `).reverse().join('');
-
-            // Save state
+            // Save state for next run
             localStorage.setItem('last_s', sInter);
             localStorage.setItem('last_w', wInter);
             localStorage.setItem('stored_prescription', finalTarget);
